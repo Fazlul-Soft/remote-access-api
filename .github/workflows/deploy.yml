@@ -1,0 +1,32 @@
+name: Deploy to Subdomain
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: FTP Deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp                       # plain FTP works 100%, no more 425 errors
+          local-dir: ./
+          server-dir: domains/flicksbd.com/public_html/remote/   # ← THIS IS THE WINNER
+          exclude: |
+            **/.git*
+            **/.github*/
+            **/node_modules/**
+            **/vendor/**
+            .env
+            storage/**/*.log
+
+      - name: Run post-deploy
+        run: |
+          curl -fsSL -X POST -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}" "${{ secrets.DEPLOY_URL }}"
