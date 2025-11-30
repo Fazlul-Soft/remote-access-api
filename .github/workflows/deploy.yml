@@ -8,26 +8,42 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # recommended for accurate sync state
 
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_HOST }}
+          server: ${{ secrets.FTP_HOST }}          # e.g. flicksbd.com or ftp.flicksbd.com
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp                       # plain FTP works 100%, no more 425 errors
+
+          protocol: ftp                            # you confirmed this works
+          port: 21                                 # explicit is safer on some hosts
+
           local-dir: ./
-          server-dir: domains/flicksbd.com/public_html/remote/   # ← THIS IS THE WINNER
+          server-dir: domains/flicksbd.com/public_html/remote/   # correct path
+
+          # Files & folders to exclude from upload
           exclude: |
-            **/.git*
-            **/.github*/
+            **/.git**
+            **/.github/**
             **/node_modules/**
             **/vendor/**
             .env
             storage/**/*.log
+            .ftp-deploy-sync-state.json            # optional: don’t upload the state file itself
+
           state-name: .ftp-deploy-sync-state.json
           timeout: 120000
-      - name: Run post-deploy
+          # Optional but recommended:
+          dangerous-clean-slate: false   # keeps deleted files on server unless you really want to wipe
+
+      - name: Trigger post-deploy hook
+        if: success()
         run: |
-          curl -fsSL -X POST -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}" "${{ secrets.DEPLOY_URL }}"
+          curl -fsSL -X POST \
+            -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}" \
+            "${{ secrets.DEPLOY_URL }}"
