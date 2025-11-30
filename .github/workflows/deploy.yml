@@ -24,7 +24,7 @@ jobs:
           port: 21                                 # explicit is safer on some hosts
 
           local-dir: ./
-          server-dir: domains/flicksbd.com/public_html/remote/   # correct path
+          server-dir: /home/u642015601/domains/flicksbd.com/public_html/remote/   # correct path
 
           # Files & folders to exclude from upload
           exclude: |
