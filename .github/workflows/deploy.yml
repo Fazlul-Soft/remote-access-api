@@ -26,7 +26,8 @@ jobs:
             **/vendor/**
             .env
             storage/**/*.log
-
+          state-name: .ftp-deploy-sync-state.json
+          timeout: 120000
       - name: Run post-deploy
         run: |
           curl -fsSL -X POST -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}" "${{ secrets.DEPLOY_URL }}"
