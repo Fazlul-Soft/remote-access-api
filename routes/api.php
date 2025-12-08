@@ -16,6 +16,7 @@ Route::post('/email/resend', [AuthController::class, 'resendVerification']);
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/plans', [SubscriptionController::class, 'plans']);
+    Route::get('/payment-method', [SubscriptionController::class, 'paymentMethod']);
     Route::post('/subscribe', [SubscriptionController::class, 'subscribe']);
 
     Route::post('/devices/register', [DeviceController::class, 'register']);

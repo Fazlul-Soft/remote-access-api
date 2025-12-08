@@ -29,6 +29,10 @@
                     class="nav-link text-white {{ request()->routeIs('admin.subscription-plans.*') ? 'bg-primary' : '' }}">
                     Subscription Plans
                 </a>
+                 <a href="{{ route('admin.payment-methods') }}"
+                    class="nav-link text-white {{ request()->routeIs('admin.payment-methods.*') ? 'bg-primary' : '' }}">
+                    Payment Method
+                </a>
                 <a href="{{ route('admin.devices.index') }}" class="nav-link text-white">Devices</a>
                 <a href="{{ route('admin.commands.index') }}" class="nav-link text-white">Commands</a>
             </div>

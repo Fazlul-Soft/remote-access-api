@@ -93,10 +93,10 @@
 
                                 <!-- Buttons -->
                                 <div class="d-flex gap-3">
-                                    <button type="submit" class="btn btn-success btn-lg px-5">
+                                    <button type="submit" class="btn btn-success px-5">
                                         Update Plan
                                     </button>
-                                    <a href="{{ route('admin.subscription-plans.index') }}" class="btn btn-secondary btn-lg">
+                                    <a href="{{ route('admin.subscription-plans.index') }}" class="btn btn-secondary">
                                         Cancel
                                     </a>
                                 </div>

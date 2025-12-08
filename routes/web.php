@@ -29,8 +29,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->name('users.toggle-active');
 
         //subscription
-        Route::resource('subscription-plans', SubscriptionPlanController::class)
-            ->names('subscription-plans');
+        Route::resource('subscription-plans', SubscriptionPlanController::class)->names('subscription-plans');
+
+        Route::get('payment-methods', [SubscriptionPlanController::class, 'paymentMethods'])->name('payment-methods');
+        Route::get('payment-method-create', [SubscriptionPlanController::class, 'paymentMethodCreate'])->name('payment-method-create');
+        Route::get('payment-method-edit/{paymentDetails}', [SubscriptionPlanController::class, 'paymentMethodEdit'])->name('payment-method-edit');
+        Route::post('payment-method-add', [SubscriptionPlanController::class, 'paymentMethodAdd'])->name('payment-method-add');
+        Route::post('payment-method-update/{paymentDetails}', [SubscriptionPlanController::class, 'paymentMethodUpdate'])->name('payment-method-update');
+        Route::delete('payment-method-delete/{paymentDetails}', [SubscriptionPlanController::class, 'paymentMethodDelete'])->name('payment-method-delete');
 
         // Resource routes
         // Route::resource('users', UserController::class);
