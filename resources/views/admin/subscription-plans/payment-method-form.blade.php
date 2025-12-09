@@ -35,8 +35,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Details</label>
-                                <div id="quill-editor" style="height: 200px;">{!! old('details', $paymentDetails->details ?? '') !!}</div>
-                                <input type="hidden" name="details" id="quill-hidden-input">
+                                <textarea name="details" class="form-control">{{ old('details', $paymentDetails->details ?? '') }}</textarea>
                             </div>
 
                             <div class="mb-3">
@@ -70,28 +69,4 @@
             </div>
         </form>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
-    <script>
-        const quill = new Quill('#quill-editor', {
-            theme: 'snow',
-            modules: {
-                toolbar: true
-            }
-        });
-        // If we are in EDIT mode → load existing content
-        @if (isset($paymentDetails) && $paymentDetails->details)
-            quill.root.innerHTML = `{!! addslashes($paymentDetails->details) !!}`;
-        @endif
-        const form = document.querySelector('form');
-        form.onsubmit = () => {
-            document.getElementById('quill-hidden-input').value = quill.root.innerHTML;
-        };
-    </script>
-
-    <style>
-        .ql-editor {
-            min-height: 200px;
-        }
-    </style>
 @endsection
