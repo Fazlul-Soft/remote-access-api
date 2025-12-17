@@ -18,6 +18,7 @@ return new class extends Migration
             $table->text('details')->nullable();
             $table->string('note')->nullable();
             $table->string('logo')->nullable(); // 'logo'
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }

@@ -11,9 +11,14 @@ class PaymentDetails extends Model
         'merchant_no',
         'details',
         'note',
-        'logo'
+        'logo',
+        'is_active',
     ];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+    
     public function getLogoUrlAttribute()
     {
         return $this->logo ? asset('uploads/' . $this->logo) : asset('images/default-payment.png');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Device;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 
 class DeviceController extends Controller
@@ -14,6 +15,17 @@ class DeviceController extends Controller
             'device_id' => 'required|unique:devices',
             'role' => 'required|in:controller,controlled',
         ]);
+
+        $existingCheck = Device::where('user_id', Auth::id())
+            ->where('role', $request->role)
+            ->count();
+        if ($existingCheck > 0 && $request->role === 'controller') {
+            return response()->json(['error' => 'already registered'], 400);
+        }
+
+        if ($existingCheck > 0 && $request->role === 'controlled') {
+            return response()->json(['error' => 'already registered'], 400);
+        }
 
         $device = Device::create([
             'user_id' => Auth::id(),
@@ -26,7 +38,10 @@ class DeviceController extends Controller
 
     public function pair(Request $request)
     {
-        $request->validate(['target_device_id' => 'required|exists:devices,device_id']);
+        Log::info("Pairing request", ['user_id' => Auth::id(), 'target_device_id' => $request->target_device_id]);
+        $request->validate([
+            'target_device_id' => 'required|exists:devices,device_id',
+        ]);
 
         $user = Auth::user();
         $controlledCount = $user->devices()->where('role', 'controlled')->count();
@@ -36,9 +51,10 @@ class DeviceController extends Controller
         }
 
         $controller = $user->devices()->where('role', 'controller')->first();
-        $target = Device::where('device_id', $request->target_device_id)->first();
+        $target = Device::where('device_id', $request->target_device_id)->where('role', 'controlled')->first();
 
-        if ($target->user_id !== $user->id) {
+        Log::info("Found devices for pairing", ['controller_id' => $user?->id, 'target_id' => $target?->user_id]);
+        if ((int) $target->user_id !== (int) $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -61,5 +77,20 @@ class DeviceController extends Controller
         }
 
         return response()->json(['status' => 'updated']);
+    }
+
+    public function checkRegistered(Request $request)
+    {
+        $deviceId = $request->header('X-Device-ID'); // Flutter sends this
+
+        if (!$deviceId) {
+            return response()->json(['registered' => false]);
+        }
+
+        $exists = $request->user()->devices()
+            ->where('device_id', $deviceId)
+            ->exists();
+
+        return response()->json(['registered' => $exists]);
     }
 }

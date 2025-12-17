@@ -73,4 +73,19 @@ class User extends Authenticatable
     {
         return $this->hasManyThrough(Command::class, Device::class, 'user_id', 'to_device_id', 'id', 'id');
     }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function activeSubscription()
+    {
+        return $this->belongsTo(SubscriptionPlan::class, 'subscription_plan_id');
+    }
+
+    public function hasActiveSubscription()
+    {
+        return $this->subscription_plan_id && $this->payments()->where('status', 'completed')->exists();
+    }
 }

@@ -2,17 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Payment;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use App\Models\PaymentDetails;
 use App\Models\SubscriptionPlan;
 use App\Http\Controllers\Controller;
-use App\Models\PaymentDetails;
 use Illuminate\Support\Facades\Auth;
 
 class SubscriptionController extends Controller
 {
     public function plans()
     {
-        return SubscriptionPlan::all();
+        $plans = SubscriptionPlan::all();
+        $paymentMethods = PaymentDetails::where('is_active', true)->get();
+
+        return response()->json([
+            'plans' => $plans,
+            'payment_methods' => $paymentMethods,
+        ]);
     }
 
     public function paymentMethod()
@@ -21,12 +29,28 @@ class SubscriptionController extends Controller
     }
     public function subscribe(Request $request)
     {
-        $request->validate(['plan_id' => 'required|exists:subscription_plans,id']);
+        $request->validate([
+            'plan_id' => 'required|exists:subscription_plans,id',
+            'amount' => 'required|numeric',
+            'transaction_id' => 'required|string',
+        ]);
 
-        $user = Auth::user();
-        $user->subscription_plan_id = $request->plan_id;
-        $user->save();
+        $plan = SubscriptionPlan::findOrFail($request->plan_id);
 
-        return response()->json(['message' => 'Subscribed successfully']);
+        // Create payment record
+        $payment = Payment::create([
+            'uuid' => strtoupper(Str::random(10)),
+            'user_id' => Auth::user()->id,
+            'subscription_plan_id' => $plan->id,
+            'amount' => $request->amount,
+            'transaction_id' => $request->transaction_id,
+            'status' => 'under_review',
+        ]);
+
+        return response()->json([
+            'message' => 'Payment submitted! Admin will verify soon.',
+            'payment_id' => $payment->uuid,
+            'status' => 'under_review'
+        ]);
     }
 }

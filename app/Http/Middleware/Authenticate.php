@@ -15,9 +15,9 @@ class Authenticate extends Middleware
         // return $request->expectsJson() ? null : route('login');
         if (!$request->expectsJson()) {
             // This is where Laravel tries to find the login route for web-based apps
-            return route('login'); 
+            return null;
         }
-    
+
         // Optionally, return a JSON response or null to handle API responses
         return null;
     }
