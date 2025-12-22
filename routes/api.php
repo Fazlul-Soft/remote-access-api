@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AccessController;
 use App\Http\Controllers\DeviceController;
+use App\Http\Controllers\CommandController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\SubscriptionController;
 
@@ -34,5 +35,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/access/gallery', [AccessController::class, 'gallery']);
     Route::post('/access/message', [AccessController::class, 'message']);
 
+    Route::get('/commands/pending', [CommandController::class, 'pending']);
     Route::post('/command/complete', [AccessController::class, 'completeCommand']);
+    // NEW: Get single command by ID
+    Route::get('/commands/{id}', [CommandController::class, 'show']);
+    Route::post('/commands/history', [CommandController::class, 'history']);
+    Route::get('/commands/sms/{command}', [CommandController::class, 'smsDetail']);
+
 });

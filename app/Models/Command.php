@@ -12,5 +12,23 @@ class Command extends Model
         'action',
         'payload',
         'status',
+        'result',
+        'error',
     ];
+
+    /**
+     * Controller device (sender)
+     */
+    public function fromDevice()
+    {
+        return $this->belongsTo(Device::class, 'from_device_id');
+    }
+
+    /**
+     * Controlled device (receiver)
+     */
+    public function toDevice()
+    {
+        return $this->belongsTo(Device::class, 'to_device_id');
+    }
 }

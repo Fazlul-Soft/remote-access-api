@@ -1,9 +1,13 @@
 <IfModule mod_rewrite.c>
+
+    RewriteEngine On
+
+    # 🔒 TEMPORARY BLOCK - STOP COMMAND POLLING
+    RewriteRule ^api/commands - [F,L]
+
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
     </IfModule>
-
-    RewriteEngine On
 
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
@@ -22,4 +26,5 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
+
 </IfModule>

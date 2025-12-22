@@ -6,18 +6,23 @@ use App\Models\Device;
 use App\Models\Command;
 use App\Events\CommandEvent;
 use Illuminate\Http\Request;
+use App\Services\StatsService;
 use App\Events\AdminStatsUpdated;
 use App\Services\FirebaseService;
 use App\Events\AdminCommandCreated;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+
 
 class AccessController extends Controller
 {
     protected $firebase;
+    protected StatsService $statsService;
 
-    public function __construct(FirebaseService $firebase)
+    public function __construct(FirebaseService $firebase, StatsService $statsService)
     {
         $this->firebase = $firebase;
+        $this->statsService = $statsService;
     }
 
     private function sendCommand($action, $target, $controller, $payload = [])
@@ -31,7 +36,10 @@ class AccessController extends Controller
         ]);
 
         event(new AdminCommandCreated($command));
-        event(new AdminStatsUpdated(getCurrentStats()));
+        // event(new AdminStatsUpdated(getCurrentStats()));
+
+        event(new AdminStatsUpdated(StatsService::current()));
+
 
         // Broadcast via Reverb (WebSocket)
         event(new CommandEvent($command));
@@ -48,19 +56,33 @@ class AccessController extends Controller
         return $command;
     }
 
+
     public function completeCommand(Request $request)
     {
-        $request->validate(['command_id' => 'required|exists:commands,id']);
-
-        $command = Command::findOrFail($request->command_id);
-        $command->update([
-            'status' => 'completed',
-            'result' => $request->result ?? null,
+        $request->validate([
+            'command_id' => 'required|exists:commands,id',
+            'result' => 'nullable|string',
+            'error' => 'nullable|string',
         ]);
 
-        // ADD THESE 2 LINES → Updates status + counters instantly
+        $command = Command::find($request->command_id);
+
+        $user = Auth::user();
+        $device = Device::where('device_id', $request->header('X-Device-ID'))->first();
+
+        // if (!$device || $command->to_device_id !== $device->id) {
+        //     abort(403, 'Unauthorized');
+        // }
+
+        $command->update([
+            'status' => $request->error ? 'failed' : 'completed',
+            'result' => $request->result,
+            'error' => $request->error,
+        ]);
+
+        // Broadcast updates
         event(new \App\Events\AdminCommandUpdated($command));
-        event(new \App\Events\AdminStatsUpdated(getCurrentStats()));
+        event(new \App\Events\AdminStatsUpdated($this->statsService->current()));
 
         return response()->json(['message' => 'Command completed']);
     }
@@ -80,7 +102,7 @@ class AccessController extends Controller
 
         $target = Device::find($request->target_device_id);
 
-        if ($target->paired_to !== $controller->id) {
+        if ((int) $target->paired_to !== (int) $controller->id) {
             abort(403, 'Device not paired with your controller.');
         }
 

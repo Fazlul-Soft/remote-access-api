@@ -11,7 +11,7 @@ class FirebaseService
 
     public function __construct()
     {
-        $factory = (new Factory)->withServiceAccount(config('firebase.credentials'));
+        $factory = (new Factory)->withServiceAccount(base_path('firebase/remote-access-e29c3-firebase-adminsdk-fbsvc-4477829c92.json'));
         $this->messaging = $factory->createMessaging();
     }
 

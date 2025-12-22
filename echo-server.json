@@ -1,0 +1,23 @@
+{
+  "authHost": "https://zynkcall.com",
+  "authEndpoint": "/broadcasting/auth",
+  "clients": [],
+  "database": "redis",
+  "databaseConfig": {
+    "redis": {}
+  },
+  "devMode": false,
+  "host": null,
+  "port": "6001",
+  "protocol": "https",
+  "socketio": {},
+  "secureOptions": 67108864,
+  "sslCertPath": "",
+  "sslKeyPath": "",
+  "apiOriginAllow": {
+    "allowCors": true,
+    "allowOrigin": "https://zynkcall.com",
+    "allowMethods": "GET, POST",
+    "allowHeaders": "Origin, Content-Type, X-Auth-Token, X-Requested-With, Accept, Authorization, X-CSRF-TOKEN, X-Socket-Id"
+  }
+}

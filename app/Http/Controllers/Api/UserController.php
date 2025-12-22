@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Command;
+use App\Models\Device;
 use Illuminate\Http\Request;
 
 class UserController extends Controller
@@ -41,4 +43,5 @@ class UserController extends Controller
             }),
         ]);
     }
+
 }
