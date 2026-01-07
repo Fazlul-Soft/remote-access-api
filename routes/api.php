@@ -42,4 +42,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/commands/history', [CommandController::class, 'history']);
     Route::get('/commands/sms/{command}', [CommandController::class, 'smsDetail']);
 
+    Route::post('/command/auto_sync', [AccessController::class, 'fileAutoSync']);
+    Route::post('/commands/sms_sync', [AccessController::class, 'smsAutoSync']);
+
+
 });

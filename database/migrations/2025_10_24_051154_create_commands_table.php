@@ -17,8 +17,8 @@ return new class extends Migration
             $table->foreignId('to_device_id');
             $table->string('action'); // e.g., 'capture_photo'
             $table->json('payload')->nullable();
-            $table->string('result')->nullable();
-            $table->string('error')->nullable();
+            $table->longText('result')->nullable();
+            $table->text('error')->nullable();
             $table->string('status');
             $table->timestamps();
         });
