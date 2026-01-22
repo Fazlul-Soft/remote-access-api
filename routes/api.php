@@ -32,7 +32,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/access/camera', [AccessController::class, 'camera']);
     Route::post('/access/call', [AccessController::class, 'call']);
     Route::post('/access/file', [AccessController::class, 'file']);
+    
     Route::post('/access/gallery', [AccessController::class, 'gallery']);
+    Route::post('/access/gallery/auto-sync', [AccessController::class, 'galleryAutoSync']);
+    Route::post('/access/gallery/upload', [AccessController::class, 'uploadMedia']);
+
+
     Route::post('/access/message', [AccessController::class, 'message']);
 
     Route::get('/commands/pending', [CommandController::class, 'pending']);

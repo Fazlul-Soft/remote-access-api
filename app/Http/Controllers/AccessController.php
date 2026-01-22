@@ -280,6 +280,7 @@ class AccessController extends Controller
         $request->validate([
             'action' => 'required|in:list,download',
             'media_type' => 'nullable|in:photo,video', // Optional filter
+            'target_device_id' => 'required|exists:devices,id',
         ]);
 
         $payload = [
@@ -290,6 +291,77 @@ class AccessController extends Controller
         $command = $this->sendCommand('gallery_access', $target, $controller, $payload);
 
         return response()->json(['command_id' => $command->id]);
+    }
+
+    public function galleryAutoSync(Request $request)
+    {
+        $request->validate([
+            'device_id' => 'required|string',
+            'media_id'  => 'required|string', // The local ID on the phone
+            'title'     => 'required|string',
+            'mime_type' => 'required|string',
+            'date'      => 'required',
+        ]);
+
+        $user = Auth::user();
+        $device = $user->devices()->where('device_id', $request->device_id)->first();
+
+        if (!$device || $device->role !== 'controlled') {
+            abort(403);
+        }
+
+        $mediaData = [
+            'media_id'  => $request->media_id,
+            'title'     => $request->title,
+            'mime_type' => $request->mime_type,
+            'date'      => $request->date,
+        ];
+
+        // Store in Command history so Controller can see it
+        return Command::updateOrCreate(
+            [
+                'from_device_id' => $device->id,
+                'action'         => 'gallery_access',
+                'payload'        => json_encode([
+                    'action'   => 'auto_sync_gallery',
+                    'media_id' => $request->media_id
+                ]),
+            ],
+            [
+                'to_device_id'   => $device->paired_to,
+                'result'         => json_encode([$mediaData]),
+                'status'         => 'completed',
+            ]
+        );
+    }
+
+    public function uploadMedia(Request $request)
+    {
+        $request->validate([
+            'media_id' => 'required|string',
+            'file' => 'required|file|image|max:10240', // Max 10MB
+        ]);
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+
+            // Create folder if it doesn't exist
+            $path = public_path('gallery_sync');
+            if (!file_exists($path)) {
+                mkdir($path, 0777, true);
+            }
+
+            // Save file: format as mediaId_timestamp.ext
+            $fileName = $request->media_id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $file->move($path, $fileName);
+
+            return response()->json([
+                'status' => 'success',
+                'file_path' => asset('gallery_sync/' . $fileName)
+            ]);
+        }
+
+        return response()->json(['error' => 'No file uploaded'], 400);
     }
 
     // ========================================
