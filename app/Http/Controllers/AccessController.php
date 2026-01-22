@@ -280,7 +280,6 @@ class AccessController extends Controller
         $request->validate([
             'action' => 'required|in:list,download',
             'media_type' => 'nullable|in:photo,video', // Optional filter
-            'target_device_id' => 'required|exists:devices,id',
         ]);
 
         $payload = [
@@ -357,7 +356,7 @@ class AccessController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'file_path' => asset('gallery_sync/' . $fileName)
+                'url' => asset('gallery_sync/' . $fileName)
             ]);
         }
 
