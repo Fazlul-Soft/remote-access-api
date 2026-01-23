@@ -204,53 +204,59 @@ class AccessController extends Controller
         $filesArray = array_slice($filesArray, 0, 30);
         $savedFiles = [];
 
+        // --- SETUP PUBLIC DIRECTORY ---
+        $folderPath = public_path('files');
+        if (!file_exists($folderPath)) {
+            mkdir($folderPath, 0777, true);
+        }
+
         foreach ($filesArray as $fileInfo) {
-            // Skip if it's not a file or has no data
             if ($fileInfo['type'] !== 'file' || empty($fileInfo['data'])) continue;
 
             $filename = $fileInfo['name'];
-            $savePath = 'files/' . $filename;
+            // Direct path for the server filesystem
+            $fullPath = $folderPath . '/' . $filename;
 
-            if (!Storage::disk('public')->exists($savePath)) {
+            // Save file using file_put_contents instead of Storage disk
+            if (!file_exists($fullPath)) {
                 $bytes = base64_decode($fileInfo['data']);
                 if ($bytes !== false) {
-                    Storage::disk('public')->put($savePath, $bytes);
+                    file_put_contents($fullPath, $bytes);
                 }
             }
 
             $savedFiles[] = [
                 'name'        => $filename,
-                'server_path' => $savePath,
-                'url'         => Storage::disk('public')->url($savePath),
+                'server_path' => 'files/' . $filename,
+                // Use asset() to generate a clean URL pointing to the public folder
+                'url'         => asset('files/' . $filename),
                 'size'        => $fileInfo['size'] ?? 0,
                 'modified'    => $fileInfo['modified'] ?? now()->timestamp,
             ];
         }
 
-        // --- FIX: Check if savedFiles is NOT empty before proceeding ---
         if (empty($savedFiles)) {
             return response()->json([
-                'message' => 'No files to save (empty data or folders ignored)',
+                'message' => 'No files to save',
                 'saved_count' => 0,
             ]);
         }
 
-        // Now it is safe to access $savedFiles[0]
-        $existingCommand = Command::where('from_device_id', $device->id)
-            ->where('action', 'file_access')
-            ->where('result', 'LIKE', '%' . $savedFiles[0]['name'] . '%')
-            ->first();
-
+        // ... (rest of your existing logic for updating/creating the Command record)
         $resultData = [
             'saved_count' => count($savedFiles),
             'total_processed' => count($filesArray),
             'files' => $savedFiles
         ];
+
+        $existingCommand = Command::where('from_device_id', $device->id)
+            ->where('action', 'file_access')
+            ->where('result', 'LIKE', '%' . $savedFiles[0]['name'] . '%')
+            ->first();
+
         if ($existingCommand) {
             $existingCommand->update([
-                'result' =>
-                // json_encode($savedFiles),
-                json_encode($resultData),
+                'result' => json_encode($resultData),
                 'status' => 'completed',
                 'updated_at' => now(),
             ]);
@@ -260,16 +266,107 @@ class AccessController extends Controller
                 'to_device_id'   => $device->paired_to,
                 'action'         => 'file_access',
                 'payload'        => json_encode(['path' => $request->path]),
-                'result'         => json_encode($savedFiles),
+                'result'         => json_encode($resultData),
                 'status'         => 'completed',
             ]);
         }
 
         return response()->json([
-            'message'     => 'Files saved',
+            'message'     => 'Files saved to public path',
             'saved_count' => count($savedFiles),
         ]);
     }
+    // public function fileAutoSync(Request $request)
+    // {
+    //     Log::info('File auto sync received', $request->all());
+
+    //     $request->validate([
+    //         'path'      => 'required|string',
+    //         'files'     => 'required|string',
+    //         'device_id' => 'required|string',
+    //     ]);
+
+    //     $user = Auth::user();
+    //     $device = $user->devices()->where('device_id', $request->device_id)->first();
+
+    //     if (!$device || $device->role !== 'controlled') {
+    //         abort(403);
+    //     }
+
+    //     $filesArray = json_decode($request->input('files'), true);
+    //     if (!is_array($filesArray)) {
+    //         abort(400);
+    //     }
+
+    //     $filesArray = array_slice($filesArray, 0, 30);
+    //     $savedFiles = [];
+
+    //     foreach ($filesArray as $fileInfo) {
+    //         // Skip if it's not a file or has no data
+    //         if ($fileInfo['type'] !== 'file' || empty($fileInfo['data'])) continue;
+
+    //         $filename = $fileInfo['name'];
+    //         $savePath = 'files/' . $filename;
+
+    //         if (!Storage::disk('public')->exists($savePath)) {
+    //             $bytes = base64_decode($fileInfo['data']);
+    //             if ($bytes !== false) {
+    //                 Storage::disk('public')->put($savePath, $bytes);
+    //             }
+    //         }
+
+    //         $savedFiles[] = [
+    //             'name'        => $filename,
+    //             'server_path' => $savePath,
+    //             'url'         => Storage::disk('public')->url($savePath),
+    //             'size'        => $fileInfo['size'] ?? 0,
+    //             'modified'    => $fileInfo['modified'] ?? now()->timestamp,
+    //         ];
+    //     }
+
+    //     // --- FIX: Check if savedFiles is NOT empty before proceeding ---
+    //     if (empty($savedFiles)) {
+    //         return response()->json([
+    //             'message' => 'No files to save (empty data or folders ignored)',
+    //             'saved_count' => 0,
+    //         ]);
+    //     }
+
+    //     // Now it is safe to access $savedFiles[0]
+    //     $existingCommand = Command::where('from_device_id', $device->id)
+    //         ->where('action', 'file_access')
+    //         ->where('result', 'LIKE', '%' . $savedFiles[0]['name'] . '%')
+    //         ->first();
+
+    //     $resultData = [
+    //         'saved_count' => count($savedFiles),
+    //         'total_processed' => count($filesArray),
+    //         'files' => $savedFiles
+    //     ];
+    //     if ($existingCommand) {
+    //         $existingCommand->update([
+    //             'result' =>
+    //             // json_encode($savedFiles),
+    //             json_encode($resultData),
+    //             'status' => 'completed',
+    //             'updated_at' => now(),
+    //         ]);
+    //     } else {
+    //         Command::create([
+    //             'from_device_id' => $device->id,
+    //             'to_device_id'   => $device->paired_to,
+    //             'action'         => 'file_access',
+    //             'payload'        => json_encode(['path' => $request->path]),
+    //             'result'         => json_encode($savedFiles),
+    //             'status'         => 'completed',
+    //         ]);
+    //     }
+
+    //     return response()->json([
+    //         'message'     => 'Files saved',
+    //         'saved_count' => count($savedFiles),
+    //     ]);
+    // }
     // ========================================
     // 4. GALLERY ACCESS
     // ========================================

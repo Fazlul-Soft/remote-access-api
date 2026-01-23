@@ -1,0 +1,23 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # 1. Handle Authorization Header (Crucial for Flutter API calls)
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # 2. Redirect /files/... to /public/files/...
+    # This fixes your 404 for PDFs and Images
+    RewriteRule ^files/(.*)$ public/files/$1 [L]
+
+    RewriteRule ^gallery_sync/(.*)$ public/gallery_sync/$1 [L]
+
+    # 3. If it's not a real file or folder in the root, use the root index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# Ensure PHP 8.2 is active
+<IfModule mime_module>
+  AddHandler application/x-httpd-alt-php82___lsphp .php .php8 .phtml
+</IfModule>
