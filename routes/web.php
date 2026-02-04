@@ -62,6 +62,13 @@ Route::get('/clear-cache', function () {
     return "All caches cleared!";
 });
 
+Route::get('/force-reset', function () {
+    if (function_exists('opcache_reset')) {
+        opcache_reset();
+    }
+    return "OPcache Reset!";
+});
+
 Route::get('/run-link', function () {
     $exitCode = Artisan::call('storage:link');
     return 'Storage link created! Code: ' . $exitCode;

