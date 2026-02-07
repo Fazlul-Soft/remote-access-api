@@ -139,7 +139,7 @@ class AccessController extends Controller
         [$controller, $target] = $this->validateAndGetDevices($request);
 
         $request->validate([
-            'type' => 'required|in:photo,video,stream',
+            'type' => 'required|in:photo,video,stream,switch_camera',
         ]);
 
         $payload = [
