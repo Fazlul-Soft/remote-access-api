@@ -7,10 +7,13 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Frontend\CommonController;
 use App\Http\Controllers\Admin\SubscriptionPlanController;
 
 
-//admin part
+//public link
+Route::get('/public-app-link', [CommonController::class, 'index'])->name('public-link.index');
+
 // Admin Routes
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/login', [AdminAuthController::class, 'showLogin'])->name('login');
@@ -24,6 +27,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::view('/devices', 'admin.devices.index')->name('devices.index');
         Route::view('/commands', 'admin.commands.index')->name('commands.index');
 
+        //app versions
+        Route::get('/app-versions', [DashboardController::class, 'apkView'])->name('app-versions.index');
+        Route::post('/app-versions/upload', [DashboardController::class, 'appVersionUpload'])->name('app-versions.upload');
+        Route::post('/app-versions/{id}/toggle-active', [DashboardController::class, 'toggleAppVersionActive'])->name('app-versions.toggle-active');
+        Route::delete('/app-versions/{id}', [DashboardController::class, 'deleteAppVersion'])->name('app-versions.delete');
         //users
         Route::get('/users/{user}', [UserController::class, 'show'])
             ->name('users.show');
