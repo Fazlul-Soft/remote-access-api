@@ -17,7 +17,7 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/email/verify', [AuthController::class, 'verifyEmail']);
 Route::post('/email/resend', [AuthController::class, 'resendVerification']);
 
-Route::post('/devices/auto-pair', [DeviceController::class, 'autoPair']);
+// Route::post('/devices/auto-pair', [DeviceController::class, 'autoPair']);
 
 Route::middleware('auth:sanctum')->group(function () {
 
