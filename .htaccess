@@ -1,23 +1,39 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # 1. Handle Authorization Header (Crucial for Flutter API calls)
+    # 1. Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
-    # 2. Redirect /files/... to /public/files/...
-    # This fixes your 404 for PDFs and Images
+    # 2. Redirect /files and /gallery_sync to public
     RewriteRule ^files/(.*)$ public/files/$1 [L]
-
     RewriteRule ^gallery_sync/(.*)$ public/gallery_sync/$1 [L]
+    RewriteRule ^apk_versions/(.*)$ public/apk_versions/$1 [L]
 
-    # 3. If it's not a real file or folder in the root, use the root index.php
-    RewriteCond %{REQUEST_FILENAME} !-f
+    # 3. NEW: Redirect /build (Vite Assets) to public/build
+    # This is what's causing your current error
+    # RewriteCond %{REQUEST_URI} ^/build/(.*)$
+    RewriteRule ^build/(.*)$ public/build/$1 [L]
+
+    # 4. Handle everything else: Redirect all traffic to the public folder
+    # This is better than pointing to root index.php for Laravel
+    RewriteCond %{REQUEST_URI} !^/public/
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^ index.php [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^(.*)$ public/$1 [L]
+
 </IfModule>
+
+# ... keep your PHP 8.2 handlers below ...
 
 # Ensure PHP 8.2 is active
 <IfModule mime_module>
   AddHandler application/x-httpd-alt-php82___lsphp .php .php8 .phtml
 </IfModule>
+
+# php -- BEGIN cPanel-generated handler, do not edit
+# Set the “alt-php82” package as the default “PHP” programming language.
+<IfModule mime_module>
+  AddHandler application/x-httpd-alt-php82___lsphp .php .php8 .phtml
+</IfModule>
+# php -- END cPanel-generated handler, do not edit

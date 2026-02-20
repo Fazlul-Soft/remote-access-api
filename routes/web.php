@@ -2,7 +2,6 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
-use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\AdminAuthController;
@@ -11,8 +10,12 @@ use App\Http\Controllers\Frontend\CommonController;
 use App\Http\Controllers\Admin\SubscriptionPlanController;
 
 
+//main page
+Route::get('/', function () {
+    return view('welcome');
+});
 //public link
-Route::get('/public-app-link', [CommonController::class, 'index'])->name('public-link.index');
+Route::get('/download-apk', [CommonController::class, 'index'])->name('public-link.index');
 
 // Admin Routes
 Route::prefix('admin')->name('admin.')->group(function () {
@@ -23,15 +26,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
 
-        Route::view('/users', 'admin.users.index')->name('users.index');
-        Route::view('/devices', 'admin.devices.index')->name('devices.index');
-        Route::view('/commands', 'admin.commands.index')->name('commands.index');
-
         //app versions
         Route::get('/app-versions', [DashboardController::class, 'apkView'])->name('app-versions.index');
         Route::post('/app-versions/upload', [DashboardController::class, 'appVersionUpload'])->name('app-versions.upload');
         Route::post('/app-versions/{id}/toggle-active', [DashboardController::class, 'toggleAppVersionActive'])->name('app-versions.toggle-active');
         Route::delete('/app-versions/{id}', [DashboardController::class, 'deleteAppVersion'])->name('app-versions.delete');
+
+        Route::view('/users', 'admin.users.index')->name('users.index');
+        Route::view('/devices', 'admin.devices.index')->name('devices.index');
+        Route::view('/commands', 'admin.commands.index')->name('commands.index');
+
         //users
         Route::get('/users/{user}', [UserController::class, 'show'])
             ->name('users.show');

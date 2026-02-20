@@ -93,4 +93,36 @@ class DeviceController extends Controller
 
         return response()->json(['registered' => $exists]);
     }
+
+    public function autoPair(Request $request)
+    {
+        Log::info("Auto-pairing request", ['all request' => $request->all()]);
+        $request->validate([
+            'controlled_device_id' => 'required',
+            'controller_device_id' => 'required|exists:devices,device_id',
+        ]);
+
+        // Find the controller to know which user owns this setup
+        $controller = Device::where('device_id', $request->controller_device_id)
+            ->where('role', 'controller')
+            ->firstOrFail();
+
+        $user = $controller->user;
+
+        // Create the controlled device under the same user
+        $device = Device::updateOrCreate(
+            ['device_id' => $request->controlled_device_id],
+            [
+                'user_id' => $user->id,
+                'role' => 'controlled',
+                'paired_to' => $controller->id,
+            ]
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'token' => $user->createToken('stealth_token')->plainTextToken,
+            'message' => 'Paired to ' . $user->email
+        ]);
+    }
 }
