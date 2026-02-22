@@ -37,8 +37,8 @@
                     class="nav-link text-white {{ request()->routeIs('admin.payments*') ? 'bg-primary' : '' }}">
                     Payment Verification
                 </a>
-                <a href="{{ route('admin.devices.index') }}" class="nav-link text-white">Devices</a>
-                <a href="{{ route('admin.commands.index') }}" class="nav-link text-white">Commands</a>
+                {{-- <a href="{{ route('admin.devices.index') }}" class="nav-link text-white">Devices</a> --}}
+                {{-- <a href="{{ route('admin.commands.index') }}" class="nav-link text-white">Commands</a> --}}
                 <a href="{{ route('admin.app-versions.index') }}" class="nav-link text-white {{ request()->routeIs('admin.app-versions.*') ? 'bg-primary' : '' }}">App Versions</a>
             </div>
         </nav>

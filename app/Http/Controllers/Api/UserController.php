@@ -25,7 +25,8 @@ class UserController extends Controller
 
             // Subscription
             'subscription_status' => $user->latestPayment?->status,
-            'subscription_plan_id'  => $user->subscription_plan_id,
+            'subscription_plan_id' => $user->latestPayment?->subscription_plan_id,
+            // 'subscription_plan_id'  => $user->subscription_plan_id,
             'plan_name'             => $user->subscriptionPlan?->name ?? 'Free',
             'max_devices'           => $user->subscriptionPlan?->max_devices ?? 1,
 

@@ -11,21 +11,64 @@ use App\Http\Controllers\Controller;
 
 class DashboardController extends Controller
 {
-    public function index()
+    // public function index()
+    // {
+    //     $stats = [
+    //         'total_users' => User::count(),
+    //         'total_devices' => Device::count(),
+    //         'total_commands' => Command::count(),
+    //         'pending_commands' => Command::where('status', 'pending')->count(),
+    //     ];
+
+    //     $recentCommands = Command::with(['fromDevice', 'toDevice'])
+    //         ->latest()
+    //         ->take(10)
+    //         ->get();
+
+    //     return view('admin.dashboard', compact('stats', 'recentCommands'));
+    // }
+    public function index(Request $request)
     {
-        $stats = [
-            'total_users' => User::count(),
-            'total_devices' => Device::count(),
-            'total_commands' => Command::count(),
-            'pending_commands' => Command::where('status', 'pending')->count(),
-        ];
+        $selectedUserId = $request->query('user_id');
 
+        // Base Queries
+        $userQuery = User::query();
+        $deviceQuery = Device::query();
+        $commandQuery = Command::query();
+
+        if ($selectedUserId) {
+            // Filter stats for the specific user
+            $stats = [
+                'total_users' => 1, // Focus on 1 user
+                'total_devices' => Device::where('user_id', $selectedUserId)->count(),
+                'total_commands' => Command::whereHas('toDevice', function ($q) use ($selectedUserId) {
+                    $q->where('user_id', $selectedUserId);
+                })->count(),
+                'pending_commands' => Command::where('status', 'pending')
+                    ->whereHas('toDevice', function ($q) use ($selectedUserId) {
+                        $q->where('user_id', $selectedUserId);
+                    })->count(),
+            ];
+        } else {
+            // Global stats
+            $stats = [
+                'total_users' => User::count(),
+                'total_devices' => Device::count(),
+                'total_commands' => Command::count(),
+                'pending_commands' => Command::where('status', 'pending')->count(),
+            ];
+        }
+
+        $users = User::orderBy('email')->get();
         $recentCommands = Command::with(['fromDevice', 'toDevice'])
-            ->latest()
-            ->take(10)
-            ->get();
+            ->when($selectedUserId, function ($query) use ($selectedUserId) {
+                return $query->whereHas('toDevice', function ($q) use ($selectedUserId) {
+                    $q->where('user_id', $selectedUserId);
+                });
+            })
+            ->latest()->paginate(10)->withQueryString();
 
-        return view('admin.dashboard', compact('stats', 'recentCommands'));
+        return view('admin.dashboard', compact('stats', 'recentCommands', 'users', 'selectedUserId'));
     }
 
     public function apkView()
@@ -104,6 +147,4 @@ class DashboardController extends Controller
 
         return back()->with('success', 'App version and file deleted successfully.');
     }
-
-    
 }
