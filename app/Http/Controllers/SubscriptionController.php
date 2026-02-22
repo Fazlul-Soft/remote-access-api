@@ -35,7 +35,17 @@ class SubscriptionController extends Controller
             'transaction_id' => 'required|string',
         ]);
 
-        $plan = SubscriptionPlan::findOrFail($request->plan_id);
+        $plan = SubscriptionPlan::find($request->plan_id);
+
+        if (!$plan) {
+            return response()->json(['message' => 'Invalid subscription plan.'], 400);
+        }
+
+        //check user have any subscription, if have then check last payment status, if last payment is under review or completed then return error
+        $latestPayment = Auth::user()->latestPayment;
+        if ($latestPayment && in_array($latestPayment->status, ['under_review', 'completed'])) {
+            return response()->json(['message' => 'You already have an active or pending subscription.'], 400);
+        }
 
         // Create payment record
         $payment = Payment::create([

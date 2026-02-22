@@ -24,6 +24,7 @@ class UserController extends Controller
             'email_verified_at'     => $user->email_verified_at,
 
             // Subscription
+            'subscription_status' => $user->latestPayment?->status,
             'subscription_plan_id'  => $user->subscription_plan_id,
             'plan_name'             => $user->subscriptionPlan?->name ?? 'Free',
             'max_devices'           => $user->subscriptionPlan?->max_devices ?? 1,
@@ -43,5 +44,4 @@ class UserController extends Controller
             }),
         ]);
     }
-
 }

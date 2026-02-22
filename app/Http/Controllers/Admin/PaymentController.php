@@ -24,6 +24,10 @@ class PaymentController extends Controller
         if ($request->status === 'completed') {
             $payment->user->subscription_plan_id = $payment->subscription_plan_id;
             $payment->user->save();
+        }else {
+            // Optionally, you can also clear the user's subscription if rejected
+            $payment->user->subscription_plan_id = null;
+            $payment->user->save();
         }
 
         $payment->save();

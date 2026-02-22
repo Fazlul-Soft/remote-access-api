@@ -88,4 +88,9 @@ class User extends Authenticatable
     {
         return $this->subscription_plan_id && $this->payments()->where('status', 'completed')->exists();
     }
+
+    public function latestPayment()
+    {
+        return $this->hasOne(Payment::class)->latestOfMany();
+    }
 }
