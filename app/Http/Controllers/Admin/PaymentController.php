@@ -27,9 +27,14 @@ class PaymentController extends Controller
             $payment->user->save();
             $plan = $payment->plan;
 
-            $expiresAt = now()->addMonths($plan->duration); // or addMonths
-            // data_hidden_at = expiry date + grace period
-            $hideDataAt = (clone $expiresAt)->addDays($plan->grace_period_days);
+            $duration = (int) $plan->duration;
+            $graceDays = (int) $plan->grace_period_days;
+
+            // Calculate expiry date
+            $expiresAt = now()->addMonths($duration);
+
+            // Calculate data hidden date
+            $hideDataAt = (clone $expiresAt)->addDays($graceDays);
 
             Subscription::updateOrCreate(
                 ['user_id' => $payment->user_id],

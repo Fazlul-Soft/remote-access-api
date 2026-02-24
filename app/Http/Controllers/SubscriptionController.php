@@ -41,6 +41,12 @@ class SubscriptionController extends Controller
             return response()->json(['message' => 'Invalid subscription plan.'], 400);
         }
 
+        $user = Auth::user();
+
+        if ($user->subscription && $user->subscription->status == 'active') {
+            return response()->json(['message' => 'You already have an active subscription.'], 400);
+        }
+
         //check user have any subscription, if have then check last payment status, if last payment is under review or completed then return error
         $latestPayment = Auth::user()->latestPayment;
         if ($latestPayment && in_array($latestPayment->status, ['under_review', 'completed'])) {

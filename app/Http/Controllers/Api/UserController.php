@@ -24,9 +24,12 @@ class UserController extends Controller
             'email_verified_at'     => $user->email_verified_at,
 
             // Subscription
-            'subscription_status' => $user->subscription?->status,
+            'subscription_status' => $user->subscription?->status ?? $user->latestPayment?->status,
             'subscription_plan_id' => $user->subscription?->subscription_plan_id,
-            // 'subscription_plan_id'  => $user->subscription_plan_id,
+            'expires_at'          => $user->subscription?->expires_at,
+            'data_hidden_at'      => $user->subscription?->data_hidden_at,
+            'grace_period_days'     => $user->subscription?->grace_period_days,
+
             'plan_name'             => $user->subscriptionPlan?->name ?? 'Free',
             'max_devices'           => $user->subscriptionPlan?->max_devices ?? 1,
 

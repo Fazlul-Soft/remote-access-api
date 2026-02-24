@@ -12,7 +12,7 @@ class UpdateSubscriptionStatus extends Command
      *
      * @var string
      */
-    protected $signature = 'app:update-subscription-status';
+    protected $signature = 'subscription:update-subscription-status';
 
     /**
      * The console command description.
