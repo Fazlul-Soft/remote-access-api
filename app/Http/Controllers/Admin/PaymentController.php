@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Models\Payment;
-use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Models\Payment;
+use App\Models\Subscription;
+use Illuminate\Http\Request;
 
 class PaymentController extends Controller
 {
@@ -24,7 +25,24 @@ class PaymentController extends Controller
         if ($request->status === 'completed') {
             $payment->user->subscription_plan_id = $payment->subscription_plan_id;
             $payment->user->save();
-        }else {
+            $plan = $payment->plan;
+
+            $expiresAt = now()->addMonths($plan->duration); // or addMonths
+            // data_hidden_at = expiry date + grace period
+            $hideDataAt = (clone $expiresAt)->addDays($plan->grace_period_days);
+
+            Subscription::updateOrCreate(
+                ['user_id' => $payment->user_id],
+                [
+                    'subscription_plan_id' => $payment->subscription_plan_id,
+                    'status' => 'active',
+                    'grace_period_days' => $plan->grace_period_days, // Saved here
+                    'starts_at' => now(),
+                    'expires_at' => $expiresAt,
+                    'data_hidden_at' => $hideDataAt,
+                ]
+            );
+        } else {
             // Optionally, you can also clear the user's subscription if rejected
             $payment->user->subscription_plan_id = null;
             $payment->user->save();

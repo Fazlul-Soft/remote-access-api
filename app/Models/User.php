@@ -23,7 +23,7 @@ class User extends Authenticatable
 
     public function subscriptionPlan()
     {
-        return $this->belongsTo(SubscriptionPlan::class);
+        return $this->belongsTo(SubscriptionPlan::class, 'subscription_plan_id', 'id');
     }
 
     /**
@@ -84,9 +84,14 @@ class User extends Authenticatable
         return $this->belongsTo(SubscriptionPlan::class, 'subscription_plan_id');
     }
 
+    public function subscription()
+    {
+        return $this->hasOne(Subscription::class);
+    }
+
     public function hasActiveSubscription()
     {
-        return $this->subscription_plan_id && $this->payments()->where('status', 'completed')->exists();
+        return $this->subscription_plan_id && $this->subscription()->exists();
     }
 
     public function latestPayment()
