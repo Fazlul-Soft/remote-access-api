@@ -2,19 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Device;
-use App\Models\Command;
-use Illuminate\Support\Str;
+use App\Events\AdminCommandCreated;
+use App\Events\AdminStatsUpdated;
 use App\Events\CommandEvent;
 use App\Events\WebRTCSignal;
-use Illuminate\Http\Request;
-use App\Services\StatsService;
-use App\Events\AdminStatsUpdated;
+use App\Models\Command;
+use App\Models\Device;
 use App\Services\FirebaseService;
-use App\Events\AdminCommandCreated;
-use Illuminate\Support\Facades\Log;
+use App\Services\StatsService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 
 class AccessController extends Controller
@@ -222,6 +223,11 @@ class AccessController extends Controller
             'action' => 'required|in:sync', // only sync (download all)
         ]);
 
+        Log::info('Initiating file sync', [
+            'controller_device_id' => $controller->device_id,
+            'target_device_id' => $target->device_id,
+        ]);
+
         $payload = [
             'action' => 'sync_files',
             'paths' => [
@@ -239,101 +245,122 @@ class AccessController extends Controller
 
     public function fileAutoSync(Request $request)
     {
-        Log::info('File auto sync received', $request->all());
+        Log::info('File auto sync received', $request->except('file_uploads'));
 
         $request->validate([
-            'path'      => 'required|string',
-            'files'     => 'required|string',
-            'device_id' => 'required|string',
+            'device_id'  => 'required|string',
+            'path'       => 'required|string',
+            'command_id' => 'nullable|string',
+            'is_final'   => 'nullable|string',
         ]);
 
         $user = Auth::user();
         $device = $user->devices()->where('device_id', $request->device_id)->first();
 
         if (!$device || $device->role !== 'controlled') {
-            abort(403);
+            return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $filesArray = json_decode($request->input('files'), true);
-        if (!is_array($filesArray)) {
-            abort(400);
-        }
-
-        $filesArray = array_slice($filesArray, 0, 30);
+        // Save uploaded files
         $savedFiles = [];
+        $folderPath = public_path('files/' . $device->device_id);
 
-        // --- SETUP PUBLIC DIRECTORY ---
-        $folderPath = public_path('files');
         if (!file_exists($folderPath)) {
             mkdir($folderPath, 0777, true);
         }
 
-        foreach ($filesArray as $fileInfo) {
-            if ($fileInfo['type'] !== 'file' || empty($fileInfo['data'])) continue;
+        if ($request->hasFile('file_uploads')) {
+            foreach ($request->file('file_uploads') as $file) {
+                $originalName = $file->getClientOriginalName();
+                $file->move($folderPath, $originalName);
 
-            $filename = $fileInfo['name'];
-            // Direct path for the server filesystem
-            $fullPath = $folderPath . '/' . $filename;
-
-            // Save file using file_put_contents instead of Storage disk
-            if (!file_exists($fullPath)) {
-                $bytes = base64_decode($fileInfo['data']);
-                if ($bytes !== false) {
-                    file_put_contents($fullPath, $bytes);
-                }
+                $savedFiles[] = [
+                    'name'        => $originalName,
+                    'server_path' => 'files/' . $device->device_id . '/' . $originalName,
+                    'url'         => asset('files/' . $device->device_id . '/' . $originalName),
+                    'size'        => File::size($folderPath . '/' . $originalName),
+                    'modified'    => now()->timestamp,
+                ];
             }
-
-            $savedFiles[] = [
-                'name'        => $filename,
-                'server_path' => 'files/' . $filename,
-                // Use asset() to generate a clean URL pointing to the public folder
-                'url'         => asset('files/' . $filename),
-                'size'        => $fileInfo['size'] ?? 0,
-                'modified'    => $fileInfo['modified'] ?? now()->timestamp,
-            ];
         }
 
-        if (empty($savedFiles)) {
-            return response()->json([
-                'message' => 'No files to save',
-                'saved_count' => 0,
-            ]);
-        }
+        Log::info('Saved ' . count($savedFiles) . ' files for device ' . $device->device_id);
 
-        // ... (rest of your existing logic for updating/creating the Command record)
-        $resultData = [
-            'saved_count' => count($savedFiles),
-            'total_processed' => count($filesArray),
-            'files' => $savedFiles
-        ];
+        // Handle command result update
+        $isFinal = $request->is_final === 'true';
 
-        $existingCommand = Command::where('from_device_id', $device->id)
-            ->where('action', 'file_access')
-            ->where('result', 'LIKE', '%' . $savedFiles[0]['name'] . '%')
-            ->first();
+        if ($request->command_id) {
+            $command = Command::find($request->command_id);
 
-        if ($existingCommand) {
-            $existingCommand->update([
-                'result' => json_encode($resultData),
-                'status' => 'completed',
-                'updated_at' => now(),
-            ]);
+            if ($command) {
+                // Merge with previously saved files from earlier path batches
+                $existingResult = $command->result ? json_decode($command->result, true) : [];
+                $existingFiles  = $existingResult['files'] ?? [];
+                $mergedFiles    = array_merge($existingFiles, $savedFiles);
+
+                if ($isFinal) {
+                    // Final batch — mark as completed so controller poll succeeds
+                    $command->update([
+                        'status' => 'completed',
+                        'result' => json_encode([
+                            'status' => 'success',
+                            'files'  => $mergedFiles,
+                            'path'   => $request->path,
+                        ]),
+                    ]);
+
+                    Log::info('Command ' . $command->id . ' marked as completed with ' . count($mergedFiles) . ' total files');
+                } else {
+                    // Intermediate batch — append files, keep polling
+                    $command->update([
+                        'result' => json_encode([
+                            'status' => 'in_progress',
+                            'files'  => $mergedFiles,
+                            'path'   => $request->path,
+                        ]),
+                    ]);
+
+                    Log::info('Command ' . $command->id . ' updated (in_progress) with ' . count($mergedFiles) . ' files so far');
+                }
+            } else {
+                Log::warning('Command not found: ' . $request->command_id);
+            }
         } else {
-            Command::create([
-                'from_device_id' => $device->id,
-                'to_device_id'   => $device->paired_to,
-                'action'         => 'file_access',
-                'payload'        => json_encode(['path' => $request->path]),
-                'result'         => json_encode($resultData),
-                'status'         => 'completed',
-            ]);
+            // Fallback: no command_id passed — find latest pending file_access command
+            $pendingCommand = Command::where('to_device_id', $device->id)
+                ->where('action', 'file_access')
+                ->where('status', 'pending')
+                ->latest()
+                ->first();
+
+            if ($pendingCommand) {
+                $existingResult = $pendingCommand->result ? json_decode($pendingCommand->result, true) : [];
+                $existingFiles  = $existingResult['files'] ?? [];
+                $mergedFiles    = array_merge($existingFiles, $savedFiles);
+
+                $pendingCommand->update([
+                    'status' => 'completed',
+                    'result' => json_encode([
+                        'status' => 'success',
+                        'files'  => $mergedFiles,
+                        'path'   => $request->path,
+                    ]),
+                ]);
+
+                Log::info('Fallback: completed command ' . $pendingCommand->id . ' with ' . count($mergedFiles) . ' files');
+            } else {
+                Log::warning('No pending file_access command found for device ' . $device->id);
+            }
         }
 
         return response()->json([
-            'message'     => 'Files saved to public path',
-            'saved_count' => count($savedFiles),
+            'message'  => 'Files synced successfully',
+            'count'    => count($savedFiles),
+            'files'    => $savedFiles,
+            'is_final' => $isFinal,
         ]);
     }
+
 
     // ========================================
     // 4. GALLERY ACCESS
@@ -498,5 +525,54 @@ class AccessController extends Controller
                 'status'         => 'completed',
             ]
         );
+    }
+
+    // Screen share
+    public function requestScreenShare(Request $request)
+    {
+        try {
+            $request->validate([
+                'target_device_id' => 'required|integer',
+            ]);
+
+            // Logic fix: Determine who the sender (Controller) is
+            $user = Auth::user();
+
+            // Use active_device_id if it exists, otherwise find the device
+            // belonging to this user that has the 'controller' role.
+            $fromDeviceId = $user->active_device_id ??
+                \DB::table('devices')
+                ->where('user_id', $user->id)
+                ->where('role', 'controller')
+                ->value('id');
+
+            if (!$fromDeviceId) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Sender device could not be identified.'
+                ], 400);
+            }
+
+            // Create the command
+            $command = Command::create([
+                'from_device_id' => (int) $fromDeviceId,
+                'to_device_id'   => (int) $request->target_device_id,
+                'action'         => 'SCREEN_SHARE',
+                'payload'        => json_encode(['type' => 'start']),
+                'status'         => 'pending',
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'command_id' => $command->id
+            ]);
+        } catch (\Exception $e) {
+            // This will show you the EXACT error in your Flutter logs instead of just "500"
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
     }
 }

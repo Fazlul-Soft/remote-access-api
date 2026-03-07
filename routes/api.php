@@ -38,6 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/webrtc/signal', [AccessController::class, 'signal']);
     Route::post('/access/camera', [AccessController::class, 'camera']);
     Route::post('/camera/upload', [AccessController::class, 'uploadCameraFile']);
+    Route::post('/access/screen', [AccessController::class, 'requestScreenShare']);
 
     Route::post('/access/call', [AccessController::class, 'call']);
     Route::post('/access/file', [AccessController::class, 'file']);
