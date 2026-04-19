@@ -54,8 +54,9 @@ class CommandController extends Controller
             return response()->json([]);
         }
 
-        $user = Auth::user();
-        $device = $user->devices()->where('device_id', $deviceId)->first();
+        // $user = Auth::user();
+        // $device = $user->devices()->where('device_id', $deviceId)->first();
+        $device = Device::where('device_id', $deviceId)->first();
 
         if (!$device) {
             return response()->json([]);
@@ -121,4 +122,5 @@ class CommandController extends Controller
             'data' => $result
         ]);
     }
+
 }

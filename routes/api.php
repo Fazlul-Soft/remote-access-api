@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AccessController;
@@ -17,12 +16,17 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/email/verify', [AuthController::class, 'verifyEmail']);
 Route::post('/email/resend', [AuthController::class, 'resendVerification']);
 
+//without auth only device id for controlled device
+
+Route::post('send-web-rtc-signal', [WebRTCSignalController::class, 'store']);
+Route::get('web-rtc-signals-pending', [WebRTCSignalController::class, 'getPending']);
+Route::get('/commands/pending', [CommandController::class, 'pending']);
+Route::post('/command/complete', [AccessController::class, 'completeCommand']);
+Route::get('/devices/my-id', [DeviceController::class, 'getMyDeviceId']);
+
 // Route::post('/devices/auto-pair', [DeviceController::class, 'autoPair']);
 
 Route::middleware('auth:sanctum')->group(function () {
-
-    Route::post('send-web-rtc-signal', [WebRTCSignalController::class, 'store']);
-    Route::get('web-rtc-signals-pending', [WebRTCSignalController::class, 'getPending']);
 
     Route::get('/user', [UserController::class, 'me']);
 
@@ -41,7 +45,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/access/screen', [AccessController::class, 'requestScreenShare']);
 
     Route::post('/access/call', [AccessController::class, 'call']);
+
     Route::post('/access/file', [AccessController::class, 'file']);
+    Route::post('/command/auto_sync', [AccessController::class, 'fileAutoSync']);
 
     Route::post('/access/gallery', [AccessController::class, 'gallery']);
     Route::post('/access/gallery/auto-sync', [AccessController::class, 'galleryAutoSync']);
@@ -49,14 +55,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     Route::post('/access/message', [AccessController::class, 'message']);
-
-    Route::get('/commands/pending', [CommandController::class, 'pending']);
-    Route::post('/command/complete', [AccessController::class, 'completeCommand']);
     // NEW: Get single command by ID
     Route::get('/commands/{id}', [CommandController::class, 'show']);
     Route::post('/commands/history', [CommandController::class, 'history']);
     Route::get('/commands/sms/{command}', [CommandController::class, 'smsDetail']);
 
-    Route::post('/command/auto_sync', [AccessController::class, 'fileAutoSync']);
     Route::post('/commands/sms_sync', [AccessController::class, 'smsAutoSync']);
 });
+

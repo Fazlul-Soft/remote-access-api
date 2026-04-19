@@ -40,7 +40,22 @@ class DeviceController extends Controller
     {
         Log::info("Pairing request", ['user_id' => Auth::id(), 'target_device_id' => $request->target_device_id]);
         $request->validate([
-            'target_device_id' => 'required|exists:devices,device_id',
+            'target_device_id' => 'required',
+        ]);
+
+        $existingCheck = Device::where('user_id', Auth::id())
+            ->where('device_id', $request->target_device_id)
+            ->where('role', 'controlled')
+            ->count();
+
+        if ($existingCheck > 0) {
+            return response()->json(['error' => 'already registered'], 400);
+        }
+
+        $target = Device::create([
+            'user_id' => Auth::id(),
+            'device_id' => $request->target_device_id,
+            'role' => 'controlled',
         ]);
 
         $user = Auth::user();
@@ -51,9 +66,9 @@ class DeviceController extends Controller
         }
 
         $controller = $user->devices()->where('role', 'controller')->first();
-        $target = Device::where('device_id', $request->target_device_id)->where('role', 'controlled')->first();
+        // $target = Device::where('device_id', $request->target_device_id)->where('role', 'controlled')->first();
 
-        Log::info("Found devices for pairing", ['controller_id' => $user?->id, 'target_id' => $target?->user_id]);
+        Log::info("Found devices for pairing", ['controller_id' => $user?->id, 'target_id' => $target?->id]);
         if ((int) $target->user_id !== (int) $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
@@ -61,7 +76,14 @@ class DeviceController extends Controller
         $target->paired_to = $controller->id;
         $target->save();
 
-        return response()->json(['message' => 'Paired successfully']);
+        // return response()->json(['message' => 'Paired successfully']);
+        return response()->json([
+            'message' => 'Paired successfully',
+            'controlled_device' => [
+                'id' => $target->id,
+                'device_id' => $target->device_id,
+            ],
+        ]);
     }
 
     public function updateFcmToken(Request $request)
@@ -94,6 +116,22 @@ class DeviceController extends Controller
         return response()->json(['registered' => $exists]);
     }
 
+    // In DeviceController
+    public function getMyDeviceId(Request $request)
+    {
+        $deviceId = $request->header('X-Device-ID');
+        $device = Device::where('device_id', $deviceId)->first();
+
+        if (!$device) {
+            return response()->json(['error' => 'Device not found'], 404);
+        }
+
+        return response()->json([
+            'id' => $device->id,
+            'device_id' => $device->device_id,
+            'role' => $device->role,
+        ]);
+    }
     // public function autoPair(Request $request)
     // {
     //     Log::info("Auto-pairing request", ['all request' => $request->all()]);

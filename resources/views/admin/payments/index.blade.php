@@ -26,8 +26,8 @@
                         <tr class="{{ $payment->status === 'completed' ? 'table-success' : ($payment->status === 'rejected' ? 'table-danger' : '') }}">
                             <td><code>{{ $payment->uuid }}</code></td>
                             <td>
-                                {{ $payment->user->email ?? $payment->user->phone }}
-                                <br><small class="text-muted">ID: {{ $payment->user->id }}</small>
+                                {{ $payment->user->email ?? $payment->user->phone ?? '—' }}
+                                {{-- <br><small class="text-muted">ID: {{ $payment->user->id }}</small> --}}
                             </td>
                             <td>{{ $payment->plan->name ?? '—' }}</td>
                             <td><strong>৳{{ number_format($payment->amount, 2) }}</strong></td>

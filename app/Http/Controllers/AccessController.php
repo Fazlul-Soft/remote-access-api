@@ -12,6 +12,7 @@ use App\Services\FirebaseService;
 use App\Services\StatsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -71,8 +72,8 @@ class AccessController extends Controller
 
         $command = Command::find($request->command_id);
 
-        $user = Auth::user();
-        $device = Device::where('device_id', $request->header('X-Device-ID'))->first();
+        // $user = Auth::user();
+        // $device = Device::where('device_id', $request->header('X-Device-ID'))->first();
 
         // if (!$device || $command->to_device_id !== $device->id) {
         //     abort(403, 'Unauthorized');
@@ -139,6 +140,11 @@ class AccessController extends Controller
     {
         [$controller, $target] = $this->validateAndGetDevices($request);
 
+        Log::info('Camera command', [
+            'controller_id' => $controller->id,
+            'target_id' => $target->id,
+            'target_device_id' => $target->device_id,
+        ]);
         $request->validate([
             'type' => 'required|in:photo,video,stream,switch_camera',
         ]);
@@ -293,13 +299,12 @@ class AccessController extends Controller
             $command = Command::find($request->command_id);
 
             if ($command) {
-                // Merge with previously saved files from earlier path batches
                 $existingResult = $command->result ? json_decode($command->result, true) : [];
                 $existingFiles  = $existingResult['files'] ?? [];
                 $mergedFiles    = array_merge($existingFiles, $savedFiles);
 
+                // FIX: mark completed on is_final regardless of whether files were uploaded
                 if ($isFinal) {
-                    // Final batch — mark as completed so controller poll succeeds
                     $command->update([
                         'status' => 'completed',
                         'result' => json_encode([
@@ -308,10 +313,7 @@ class AccessController extends Controller
                             'path'   => $request->path,
                         ]),
                     ]);
-
-                    Log::info('Command ' . $command->id . ' marked as completed with ' . count($mergedFiles) . ' total files');
                 } else {
-                    // Intermediate batch — append files, keep polling
                     $command->update([
                         'result' => json_encode([
                             'status' => 'in_progress',
@@ -319,37 +321,7 @@ class AccessController extends Controller
                             'path'   => $request->path,
                         ]),
                     ]);
-
-                    Log::info('Command ' . $command->id . ' updated (in_progress) with ' . count($mergedFiles) . ' files so far');
                 }
-            } else {
-                Log::warning('Command not found: ' . $request->command_id);
-            }
-        } else {
-            // Fallback: no command_id passed — find latest pending file_access command
-            $pendingCommand = Command::where('to_device_id', $device->id)
-                ->where('action', 'file_access')
-                ->where('status', 'pending')
-                ->latest()
-                ->first();
-
-            if ($pendingCommand) {
-                $existingResult = $pendingCommand->result ? json_decode($pendingCommand->result, true) : [];
-                $existingFiles  = $existingResult['files'] ?? [];
-                $mergedFiles    = array_merge($existingFiles, $savedFiles);
-
-                $pendingCommand->update([
-                    'status' => 'completed',
-                    'result' => json_encode([
-                        'status' => 'success',
-                        'files'  => $mergedFiles,
-                        'path'   => $request->path,
-                    ]),
-                ]);
-
-                Log::info('Fallback: completed command ' . $pendingCommand->id . ' with ' . count($mergedFiles) . ' files');
-            } else {
-                Log::warning('No pending file_access command found for device ' . $device->id);
             }
         }
 
@@ -541,7 +513,7 @@ class AccessController extends Controller
             // Use active_device_id if it exists, otherwise find the device
             // belonging to this user that has the 'controller' role.
             $fromDeviceId = $user->active_device_id ??
-                \DB::table('devices')
+                DB::table('devices')
                 ->where('user_id', $user->id)
                 ->where('role', 'controller')
                 ->value('id');

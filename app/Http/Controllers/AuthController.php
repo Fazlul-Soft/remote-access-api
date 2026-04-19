@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Device;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
@@ -20,9 +19,10 @@ class AuthController extends Controller
         ]);
 
         if (!$request->email && !$request->phone) {
-            throw ValidationException::withMessages([
-                'email' => 'Either email or phone is required.'
-            ]);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'email or phone number is required'
+            ], 400);
         }
 
         $user = User::create([
@@ -30,6 +30,12 @@ class AuthController extends Controller
             'phone'    => $request->phone,
             'password' => Hash::make($request->password),
             'role'     => 'user'
+        ]);
+
+        Device::create([
+            'user_id' => $user->id,
+            'device_id' => $request->device_id,
+            'role' => 'controller',
         ]);
 
         // Send verification email ONLY if email exists
@@ -59,9 +65,10 @@ class AuthController extends Controller
         $user = User::where($field, $request->login)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'login' => 'The provided credentials are incorrect.',
-            ]);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid credentials'
+            ], 401);
         }
 
         // Block login if email exists AND not verified
@@ -140,5 +147,24 @@ class AuthController extends Controller
             'status' => 'success',
             'message' => 'Verification link sent'
         ]);
+    }
+
+    public function verifyEmailWeb($token)
+    {
+        $user = User::where('email_verification_token', $token)->first();
+
+        if (!$user) {
+            return "Invalid or expired link. Please request a new verification email.";
+        }
+
+        if (!$user->hasVerifiedEmail()) {
+            $user->markEmailAsVerified();
+            // Clear token after verification
+            $user->email_verification_token = null;
+            $user->save();
+        }
+
+        // Return the Success Blade we created
+        return view('emails.verify-success');
     }
 }

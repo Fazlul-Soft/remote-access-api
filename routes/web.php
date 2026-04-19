@@ -1,13 +1,14 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Artisan;
-use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Frontend\CommonController;
+use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\SubscriptionPlanController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Frontend\CommonController;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Route;
 
 
 //main page
@@ -16,6 +17,7 @@ Route::get('/', function () {
 });
 //public link
 Route::get('/download-apk', [CommonController::class, 'index'])->name('public-link.index');
+Route::get('/verify-email/{token}', [AuthController::class, 'verifyEmailWeb']);
 
 // Admin Routes
 Route::prefix('admin')->name('admin.')->group(function () {
