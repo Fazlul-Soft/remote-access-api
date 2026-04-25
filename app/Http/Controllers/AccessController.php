@@ -547,4 +547,19 @@ class AccessController extends Controller
             ], 500);
         }
     }
+
+    public function location(Request $request)
+    {
+        [$controller, $target] = $this->validateAndGetDevices($request);
+
+        $request->validate([
+            'action' => 'required|in:start,stop',
+        ]);
+
+        $command = $this->sendCommand('location_access', $target, $controller, [
+            'action' => $request->action,
+        ]);
+
+        return response()->json(['command_id' => $command->id]);
+    }
 }

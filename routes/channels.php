@@ -13,3 +13,8 @@ Broadcast::channel('device.{deviceId}', function ($user, $deviceId) {
 
 Broadcast::channel('admin-stats', fn ($user) => $user->isAdmin());
 Broadcast::channel('admin-commands', fn ($user) => $user->isAdmin());
+
+// routes/channels.php
+Broadcast::channel('location.{controllerDeviceId}', function ($user, $controllerDeviceId) {
+    return $user->devices()->where('device_id', $controllerDeviceId)->exists();
+});

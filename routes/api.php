@@ -1,13 +1,14 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AccessController;
-use App\Http\Controllers\DeviceController;
-use App\Http\Controllers\CommandController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CommandController;
+use App\Http\Controllers\DeviceController;
+use App\Http\Controllers\LocationController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\WebRTCSignalController;
+use Illuminate\Support\Facades\Route;
 
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -23,6 +24,7 @@ Route::get('web-rtc-signals-pending', [WebRTCSignalController::class, 'getPendin
 Route::get('/commands/pending', [CommandController::class, 'pending']);
 Route::post('/command/complete', [AccessController::class, 'completeCommand']);
 Route::get('/devices/my-id', [DeviceController::class, 'getMyDeviceId']);
+Route::post('/location/update', [LocationController::class, 'update']);
 
 // Route::post('/devices/auto-pair', [DeviceController::class, 'autoPair']);
 
@@ -61,5 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/commands/sms/{command}', [CommandController::class, 'smsDetail']);
 
     Route::post('/commands/sms_sync', [AccessController::class, 'smsAutoSync']);
+
+    Route::post('/access/location', [AccessController::class, 'location']);
 });
 
