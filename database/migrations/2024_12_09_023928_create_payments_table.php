@@ -14,8 +14,8 @@ return new class extends Migration
         Schema::create('payments', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique(); // 10-digit-like unique ID
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->foreignId('subscription_plan_id')->constrained();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('subscription_plan_id');
             $table->decimal('amount', 10, 2);
             $table->string('transaction_id'); // from user
             $table->string('gateway')->default('bkash');
