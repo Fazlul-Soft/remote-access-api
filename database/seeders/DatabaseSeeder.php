@@ -18,7 +18,8 @@ class DatabaseSeeder extends Seeder
         $this->call(
             [
                 AdminSeeder::class,
-                SubscriptionPlanSeeder::class
+                SubscriptionPlanSeeder::class,
+                PaymentDetailsSeeder::class
             ]
         );
     }
