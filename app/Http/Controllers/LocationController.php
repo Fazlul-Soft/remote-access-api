@@ -58,9 +58,9 @@ class LocationController extends Controller
         }
 
         return response()->json([
-            'latitude'   => $location->latitude,
-            'longitude'  => $location->longitude,
-            'accuracy'   => $location->accuracy,
+            'latitude'   => (float) $location->latitude,
+            'longitude'  => (float) $location->longitude,
+            'accuracy'   => (float) $location->accuracy,
             'updated_at' => $location->updated_at,
         ]);
     }

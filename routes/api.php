@@ -67,5 +67,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/access/location', [AccessController::class, 'location']);
 
     Route::get('/location/latest', [LocationController::class, 'latest']);
-    Route::post('/access/location', [AccessController::class, 'location']);
 });
