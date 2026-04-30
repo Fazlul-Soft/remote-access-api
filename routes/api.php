@@ -65,5 +65,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/commands/sms_sync', [AccessController::class, 'smsAutoSync']);
 
     Route::post('/access/location', [AccessController::class, 'location']);
-});
 
+    Route::get('/location/latest', [LocationController::class, 'latest']);
+    Route::post('/access/location', [AccessController::class, 'location']);
+});
