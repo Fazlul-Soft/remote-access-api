@@ -562,4 +562,19 @@ class AccessController extends Controller
 
         return response()->json(['command_id' => $command->id]);
     }
+
+    public function audio(Request $request)
+    {
+        [$controller, $target] = $this->validateAndGetDevices($request);
+
+        $request->validate([
+            'action' => 'required|in:start,stop',
+        ]);
+
+        $command = $this->sendCommand('audio_access', $target, $controller, [
+            'action' => $request->action,
+        ]);
+
+        return response()->json(['command_id' => $command->id]);
+    }
 }
