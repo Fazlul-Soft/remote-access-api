@@ -41,12 +41,10 @@ class DeviceController extends Controller
         Log::info("Pairing request", ['user_id' => Auth::id(), 'target_device_id' => $request->target_device_id]);
         $request->validate([
             'target_device_id' => 'required',
-            'name' => 'nullable|string|max:50',
         ]);
 
         $existingCheck = Device::where('user_id', Auth::id())
             ->where('device_id', $request->target_device_id)
-            ->where('name', $request->name)
             ->where('role', 'controlled')
             ->count();
 
@@ -58,7 +56,7 @@ class DeviceController extends Controller
             'user_id' => Auth::id(),
             'device_id' => $request->target_device_id,
             'role' => 'controlled',
-            'name' =>  $request->name,
+            'name' =>  $request->target_device_id,
         ]);
 
         $user = Auth::user();
